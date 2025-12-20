@@ -3,9 +3,16 @@
 #include <exec/types.h>
 #endif
 
-#define DELAY 16
+#define DELAY 5
 #define WIDTH 16
 #define HEIGHT 32
+
+#define LEFT -1
+#define RIGHT 1
+#define UP -WIDTH
+#define DOWN WIDTH
+
+#define AMMO_PACK 8
 
 #define enterCell(cell, as, dir, frame) types[(cell)->type].enter(cell, as, dir, frame)
 
@@ -33,6 +40,18 @@ enum
     T_FIRE,
     T_EXPLOSION,
 
+    T_CANNON,
+    T_LASER,
+    T_BLASTER,
+
+    T_BEAM,
+    T_BEAM_SHRINK,
+    T_BEAM_EXTEND,
+
+    T_STREAM,
+    
+    T_BAT,
+
     T_COUNT
 };
 
@@ -44,6 +63,7 @@ typedef struct Cell
 
     WORD delay;
     BOOL scanned;
+    WORD index;
 } Cell;
 
 typedef struct Map
@@ -55,6 +75,8 @@ typedef struct Map
     WORD keys;
     WORD dir;
     BOOL fire;
+    WORD pos;
+    WORD toggle;
 } Map;
 
 typedef BOOL Enter( Cell *cell, WORD as, WORD dir, WORD frame );
@@ -80,3 +102,7 @@ extern VOID sumBase( VOID );
 extern VOID initTypes( VOID );
 
 extern VOID updateCell( Cell *cell, WORD type, WORD dir, WORD frame );
+
+extern VOID scanMap( VOID );
+
+extern VOID initMap( VOID );
