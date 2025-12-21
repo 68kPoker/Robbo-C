@@ -21,36 +21,39 @@ enum
     T_SPACE,
     T_WALL,
 
-    T_SCREW,
-    T_AMMO,
+    T_CAPSULE,
+
+    T_SCREW,    
     T_KEY,
+    T_AMMO,
+
+    T_DOOR,
 
     T_BOX,
     T_WHEELED_BOX,
 
-    T_DOOR,
-    T_DEBRIS,
-
-    T_ROBBO,
-
-    T_CAPSULE,
-
-    T_BULLET,
-
-    T_FIRE,
-    T_EXPLOSION,
+    T_BOMB,
+    T_BAT,
 
     T_CANNON,
     T_LASER,
     T_BLASTER,
 
+    T_SURPRISE,
+
+    T_DEBRIS,
+
+    T_MAGNET,
+    T_BULLET,
     T_BEAM,
     T_BEAM_SHRINK,
     T_BEAM_EXTEND,
 
+    T_ROBBO,
+    T_BLANK,
+    T_FIRE,
+    T_EXPLOSION,
     T_STREAM,
-    
-    T_BAT,
 
     T_COUNT
 };
@@ -87,15 +90,16 @@ typedef struct Type
 {
     Enter *enter;
     Scan *scan;
-    WORD base;
+    WORD base, count;
     WORD *frames;
+    WORD dirs;
 } Type;
 
 extern Map map;
 
 extern Type types[ T_COUNT ];
 
-extern VOID initType( WORD type, Enter *enter, Scan *scan, WORD base );
+extern VOID initType( WORD type, Enter *enter, Scan *scan, WORD base, WORD dirs );
 
 extern VOID sumBase( VOID );
 

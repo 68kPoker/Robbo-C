@@ -7,13 +7,14 @@ Map map;
 
 Type types[ T_COUNT ];
 
-VOID initType( WORD type, Enter *enter, Scan *scan, WORD base )
+VOID initType( WORD type, Enter *enter, Scan *scan, WORD base, WORD dirs )
 {
     Type *ptr = types + type;
 
     ptr->enter = enter;
     ptr->scan = scan;
-    ptr->base = base;
+    ptr->count = base;
+    ptr->dirs = dirs;
 }
 
 VOID sumBase( VOID )
@@ -25,7 +26,7 @@ VOID sumBase( VOID )
     {
         Type *ptr = types + type;
 
-        base = ptr->base;
+        base = ptr->count << ptr->dirs;
         ptr->base = sum;
         sum += base;
     }
@@ -172,7 +173,7 @@ STATIC VOID scanBullet( Cell *cell )
 STATIC VOID scanFire( Cell *cell )
 {
     cell->delay = DELAY;
-    if( cell->frame < 2 )
+    if( cell->frame < 6 )
     {
         cell->frame++;
     }
@@ -185,7 +186,7 @@ STATIC VOID scanFire( Cell *cell )
 STATIC VOID scanExplosion( Cell *cell )
 {
     cell->delay = DELAY;
-    if( cell->frame < 4 )
+    if( cell->frame < 6 )
     {
         cell->frame++;
     }
@@ -296,7 +297,7 @@ STATIC VOID scanBlaster( Cell *cell )
     if( cell->index > 0 )
     {
         enterCell( cell + cell->dir, T_STREAM, cell->dir, cell->index - 1 );
-        if( ++cell->index == 6 )
+        if( ++cell->index == 8 )
         {
             cell->index = 0;
         }
@@ -322,35 +323,59 @@ STATIC BOOL enterStream( Cell *cell, WORD as, WORD dir, WORD frame )
     return( FALSE );
 }
 
+VOID dupFrames( WORD from, WORD to )
+{
+    types[ from ].base = types[ to ].base;
+    types[ from ].frames = types[ to ].frames;
+    types[ from ].count = types[ to ].count;
+    types[ from ].dirs = types[ to ].dirs;
+}
+
 VOID initTypes( VOID )
 {
-    static WORD streamFrames[ 5 ] = { 0, 1, 2, 1, 0 }, fireFrames[ 3 ] = { 0, 1, 0 };
+    static WORD streamFrames[ 7 ] = { 0, 1, 2, 3, 2, 1, 0 }, fireFrames[ 7 ] = { 0, 1, 2, 3, 2, 1, 0 };
 
-    initType( T_SPACE, enterSpace, NULL, 1 );
-    initType( T_WALL, enterWall, NULL, 1 );
-    initType( T_SCREW, enterScrew, NULL, 1 );
-    initType( T_AMMO, enterAmmo, NULL, 1 );
-    initType( T_KEY, enterKey, NULL, 1 );
-    initType( T_DOOR, enterDoor, NULL, 1 );
-    initType( T_BOX, enterBox, NULL, 1 );
-    initType( T_WHEELED_BOX, enterBox, scanWheeledBox, 1 );
-    initType( T_DEBRIS, enterDebris, NULL, 1 );
-    initType( T_ROBBO, enterDebris, scanRobbo, 12 );
-    initType( T_BULLET, enterWall, scanBullet, 4 );
-    initType( T_FIRE, enterWall, scanFire, 2 );
-    initType( T_EXPLOSION, enterWall, scanExplosion, 3 );
-    initType( T_CANNON, enterWall, scanCannon, 1 );
-    initType( T_LASER, enterWall, scanLaser, 4 );
-    initType( T_BLASTER, enterWall, scanBlaster, 4 );
-    initType( T_BAT, enterDebris, scanBat, 2 );
-    initType( T_BEAM_SHRINK, enterWall, scanBeamShrink, 2 );
-    initType( T_BEAM_EXTEND, enterWall, scanBeamExtend, 2 );
-    initType( T_BEAM, enterWall, NULL, 2 );
-    initType( T_STREAM, enterStream, scanStream, 3 );
-    types[ T_EXPLOSION ].frames = types[ T_STREAM ].frames = streamFrames;
-    types[ T_FIRE ].frames = fireFrames;
-    types[ T_BULLET ].frames = types[ T_BEAM ].frames = types[ T_BEAM_EXTEND ].frames = types[ T_BEAM_SHRINK ].frames = &map.toggle;
+    initType( T_SPACE, enterSpace, NULL, 1, 0 );
+    initType( T_WALL, enterWall, NULL, 1, 0 );
+    initType( T_CAPSULE, NULL, NULL, 2, 0 );
+    initType( T_SCREW, enterScrew, NULL, 1, 0 );
+    initType( T_KEY, enterKey, NULL, 1, 0 );
+    initType( T_AMMO, enterAmmo, NULL, 1, 0 );
+    
+    initType( T_DOOR, enterDoor, NULL, 1, 0 );
+    initType( T_BOX, enterBox, NULL, 1, 0 );
+    initType( T_WHEELED_BOX, enterBox, scanWheeledBox, 1, 0 );
+    initType( T_BOMB, NULL, NULL, 1, 0 );
+    initType( T_BAT, enterDebris, scanBat, 4, 0 );
+    initType( T_DEBRIS, enterDebris, NULL, 1, 0 );
+    initType( T_ROBBO, enterDebris, scanRobbo, 2, 2 );
+    initType( T_BULLET, enterWall, scanBullet, 2, 2 );
+    initType( T_FIRE, enterWall, scanFire, 4, 0 );
+    initType( T_EXPLOSION, enterWall, scanExplosion, 0, 0 );
+    initType( T_CANNON, enterWall, scanCannon, 1, 2 );
+    initType( T_LASER, enterWall, scanLaser, 0, 2 );
+    initType( T_BLASTER, enterWall, scanBlaster, 0, 2 );
+    
+    initType( T_BEAM_SHRINK, enterWall, scanBeamShrink, 0, 2 );
+    initType( T_BEAM_EXTEND, enterWall, scanBeamExtend, 0, 2 );
+    initType( T_BEAM, enterWall, NULL, 0, 2 );
+    initType( T_STREAM, enterStream, scanStream, 0, 0 );
+    
+    initType( T_MAGNET, NULL, NULL, 1, 1 );
+    initType( T_SURPRISE, NULL, NULL, 1, 0 );
+    initType( T_BLANK, NULL, NULL, 1, 0 );
     sumBase();
+    
+    types[ T_FIRE ].frames = fireFrames;
+    types[ T_BULLET ].frames = &map.toggle;
+
+    dupFrames( T_LASER, T_CANNON );
+    dupFrames( T_BLASTER, T_CANNON );
+    dupFrames( T_BEAM, T_BULLET );
+    dupFrames( T_BEAM_EXTEND, T_BULLET );
+    dupFrames( T_BEAM_SHRINK, T_BULLET );
+    dupFrames( T_STREAM, T_FIRE );
+    dupFrames( T_EXPLOSION, T_FIRE );         
 }
 
 VOID initMap( VOID )
