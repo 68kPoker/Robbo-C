@@ -3,9 +3,9 @@
 #include <exec/types.h>
 #endif
 
-#define DELAY 5
+#define DELAY 4
 #define WIDTH 16
-#define HEIGHT 32
+#define HEIGHT 20
 
 #define LEFT -1
 #define RIGHT 1
@@ -50,9 +50,9 @@ enum
     T_BEAM_EXTEND,
 
     T_ROBBO,
-    T_BLANK,
-    T_FIRE,
+    T_BLANK,    
     T_EXPLOSION,
+    T_FIRE,
     T_STREAM,
 
     T_COUNT
@@ -80,6 +80,8 @@ typedef struct Map
     BOOL fire;
     WORD pos;
     WORD toggle;
+    struct BitMap *gfx;
+    struct RastPort *rp;
 } Map;
 
 typedef BOOL Enter( Cell *cell, WORD as, WORD dir, WORD frame );

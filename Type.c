@@ -132,6 +132,7 @@ STATIC VOID scanRobbo( Cell *cell )
     if( dir )
     {
         cell->delay = DELAY;
+        cell->frame ^= 1;
         if( !map.fire )
         {
             WORD type = cell->type;
@@ -144,6 +145,7 @@ STATIC VOID scanRobbo( Cell *cell )
         }
         else
         {
+            map.fire = map.dir = 0;
             if( map.ammo > 0 )
             {
                 Cell *dest = cell + dir;
@@ -173,7 +175,7 @@ STATIC VOID scanBullet( Cell *cell )
 STATIC VOID scanFire( Cell *cell )
 {
     cell->delay = DELAY;
-    if( cell->frame < 6 )
+    if( cell->frame < 2 )
     {
         cell->frame++;
     }
@@ -186,7 +188,7 @@ STATIC VOID scanFire( Cell *cell )
 STATIC VOID scanExplosion( Cell *cell )
 {
     cell->delay = DELAY;
-    if( cell->frame < 6 )
+    if( cell->frame < 4 )
     {
         cell->frame++;
     }
@@ -226,6 +228,7 @@ STATIC VOID scanBat( Cell *cell )
     WORD dir = cell->dir;
     Cell *dest = cell + dir;
 
+    cell->frame ^= 1;
     if( enterCell( dest, cell->type, dir, cell->frame ) )
     {
         updateCell( cell, T_SPACE, 0, 0 );
@@ -233,6 +236,7 @@ STATIC VOID scanBat( Cell *cell )
     else
     {
         cell->dir = -cell->dir;
+        cell->delay = DELAY;
     }
 }
 
@@ -297,7 +301,7 @@ STATIC VOID scanBlaster( Cell *cell )
     if( cell->index > 0 )
     {
         enterCell( cell + cell->dir, T_STREAM, cell->dir, cell->index - 1 );
-        if( ++cell->index == 8 )
+        if( ++cell->index == 6 )
         {
             cell->index = 0;
         }
@@ -333,7 +337,7 @@ VOID dupFrames( WORD from, WORD to )
 
 VOID initTypes( VOID )
 {
-    static WORD streamFrames[ 7 ] = { 0, 1, 2, 3, 2, 1, 0 }, fireFrames[ 7 ] = { 0, 1, 2, 3, 2, 1, 0 };
+    static WORD explosionFrames[ 5 ] = { 0, 1, 2, 1, 0 }, fireFrames[ 3 ] = { 0, 1, 2 };
 
     initType( T_SPACE, enterSpace, NULL, 1, 0 );
     initType( T_WALL, enterWall, NULL, 1, 0 );
@@ -350,8 +354,8 @@ VOID initTypes( VOID )
     initType( T_DEBRIS, enterDebris, NULL, 1, 0 );
     initType( T_ROBBO, enterDebris, scanRobbo, 2, 2 );
     initType( T_BULLET, enterWall, scanBullet, 2, 2 );
-    initType( T_FIRE, enterWall, scanFire, 4, 0 );
-    initType( T_EXPLOSION, enterWall, scanExplosion, 0, 0 );
+    initType( T_FIRE, enterWall, scanFire, 3, 0 );
+    initType( T_EXPLOSION, enterWall, scanExplosion, 3, 0 );
     initType( T_CANNON, enterWall, scanCannon, 1, 2 );
     initType( T_LASER, enterWall, scanLaser, 0, 2 );
     initType( T_BLASTER, enterWall, scanBlaster, 0, 2 );
@@ -367,6 +371,7 @@ VOID initTypes( VOID )
     sumBase();
     
     types[ T_FIRE ].frames = fireFrames;
+    types[ T_EXPLOSION ].frames = explosionFrames;
     types[ T_BULLET ].frames = &map.toggle;
 
     dupFrames( T_LASER, T_CANNON );
@@ -374,8 +379,7 @@ VOID initTypes( VOID )
     dupFrames( T_BEAM, T_BULLET );
     dupFrames( T_BEAM_EXTEND, T_BULLET );
     dupFrames( T_BEAM_SHRINK, T_BULLET );
-    dupFrames( T_STREAM, T_FIRE );
-    dupFrames( T_EXPLOSION, T_FIRE );         
+    dupFrames( T_STREAM, T_EXPLOSION );    
 }
 
 VOID initMap( VOID )
