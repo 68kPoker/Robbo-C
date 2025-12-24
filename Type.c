@@ -371,6 +371,7 @@ STATIC BOOL enterBomb( Cell *cell, WORD as, WORD dir, WORD frame )
     {
         updateCell( cell, T_BOMB_EXPLODING, 0, 0 );        
     }
+    return( FALSE );
 }
 
 STATIC VOID scanBomb( Cell *cell )
@@ -541,6 +542,7 @@ VOID scanMap( VOID )
             }
             else if( types[ cell->type ].scan )
             {
+                map.scanned = cell;
                 types[ cell->type ].scan( cell );
             }
         }
