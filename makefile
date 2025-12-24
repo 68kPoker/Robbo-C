@@ -11,7 +11,7 @@ all: Robbo.exe
 .c.o:
   $(cc) $(cflags) $*.c
 
-Game.exe: Window.o Type.o Blitter.o
+Robbo.exe: Window.o Type.o Blitter.o
   $(link) $(lflags) $@ $**
 
 Window.o: Window.h Cell.h Blitter.h

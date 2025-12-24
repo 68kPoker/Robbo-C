@@ -144,11 +144,11 @@ VOID testMap( VOID )
     {
         "################",
         "#....#...SN....#",
-        "#.R..#...#..$$$#",
+        "#.R..#.B.#..$$$#",
         "#........#.#####",
         "###.##...#.#...#",
         "#>....GGGS....A#",
-        "#........#######",
+        "#M.......#######",
         "#.............[#",
         "##D######.######",
         "#.GGG...#.#...L#",
@@ -156,11 +156,11 @@ VOID testMap( VOID )
         "#....K..########",
         "#...K.S........#",
         "#.......#......#",
-        "#.......#+.$$.+#",
-        "#.......########",
+        "#.......#..$$..#",
+        "#SSSGGSS#+####+#",
+        "#.......###..###",
         "#..............#",
-        "#..............#",
-        "#..............#",
+        "#.............C#",
         "################",
     };
 
@@ -185,6 +185,9 @@ VOID testMap( VOID )
             case 'L': type = T_KEY; break;
             case 'A': type = T_AMMO; break;
             case 'N': type = T_BAT; dir = DOWN; break;
+            case 'B': type = T_BOMB; break;
+            case 'M': type = T_MAGNET_RIGHT; break;
+            case 'C': type = T_CAPSULE; break;
             }
             map.map[ i ][ j ].type = type;
             map.map[ i ][ j ].dir = dir;
@@ -533,7 +536,7 @@ int main( void )
                             drawPanel( w );
                             WaitBlit();
                             ScreenToFront( s );
-                            while( !done )
+                            while( !done && !map.done )
                             {
                                 ULONG mask = 1L << w->UserPort->mp_SigBit;
                                 WaitTOF();

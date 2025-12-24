@@ -102,6 +102,10 @@ STATIC BOOL enterBox( Cell *cell, WORD as, WORD dir, WORD frame )
             return( TRUE );
         }
     }
+    else if( as == T_EXPLOSION )
+    {
+        updateCell( cell, as, dir, frame );
+    }
     return( FALSE );
 }
 
@@ -127,13 +131,13 @@ STATIC VOID scanWheeledBox( Cell *cell )
 
 STATIC VOID scanRobbo( Cell *cell )
 {
-    WORD dir = map.dir;
+    WORD dir = map.block ? map.block : map.dir;
 
     if( dir )
     {
         cell->delay = DELAY;
         cell->frame ^= 1;
-        if( !map.fire )
+        if( !map.fire || map.block )
         {
             WORD type = cell->type;
             Cell *dest = cell + dir;
@@ -200,7 +204,20 @@ STATIC VOID scanExplosion( Cell *cell )
 
 STATIC BOOL enterDebris( Cell *cell, WORD as, WORD dir, WORD frame )
 {
-    if( as == T_BULLET || as == T_BEAM_EXTEND )
+    if( as == T_BULLET || as == T_BEAM_EXTEND || as == T_EXPLOSION )
+    {
+        updateCell( cell, T_EXPLOSION, 0, 0 );
+    }
+    else if( as == T_STREAM )
+    {
+        updateCell( cell, as, dir, frame );
+    }
+    return( FALSE );
+}
+
+STATIC BOOL enterRobbo( Cell *cell, WORD as, WORD dir, WORD frame )
+{
+    if( as == T_BULLET || as == T_BEAM_EXTEND || as == T_BAT || as == T_EXPLOSION )
     {
         updateCell( cell, T_EXPLOSION, 0, 0 );
     }
@@ -327,6 +344,75 @@ STATIC BOOL enterStream( Cell *cell, WORD as, WORD dir, WORD frame )
     return( FALSE );
 }
 
+STATIC BOOL enterCapsule( Cell *cell, WORD as, WORD dir, WORD frame )
+{
+    if( as == T_ROBBO )
+    {
+        if( map.collected >= map.required )
+        {
+            map.done = TRUE;            
+        }
+    }
+    return( FALSE );
+}
+
+STATIC BOOL enterBomb( Cell *cell, WORD as, WORD dir, WORD frame )
+{
+    if( as == T_ROBBO )
+    {
+        Cell *dest = cell + dir;
+        if( enterCell( dest, cell->type, dir, cell->frame ) )
+        {
+            updateCell( cell, as, dir, frame );
+            return( TRUE );
+        }
+    }
+    else if( as == T_BULLET || as == T_STREAM || as == T_EXPLOSION )
+    {
+        updateCell( cell, T_BOMB_EXPLODING, 0, 0 );        
+    }
+}
+
+STATIC VOID scanBomb( Cell *cell )
+{
+    static WORD neighbor[ 9 ] = { UP, LEFT + DOWN, RIGHT, DOWN, RIGHT + UP, LEFT, LEFT + UP, RIGHT + DOWN, 0 };
+    WORD i;
+
+    cell->delay = DELAY;
+    
+    for( i = 0; i < 3; i++ )
+    {
+        enterCell( cell + neighbor[ cell->index + i - 1 ], T_EXPLOSION, neighbor[ cell->index + i - 1 ], 0 );
+    }
+    cell->index += 3;
+}
+
+STATIC VOID scanMagnet( Cell *cell )
+{
+    WORD dir = cell->type == T_MAGNET_RIGHT ? RIGHT : LEFT;
+    Cell *neighbor = cell + dir;
+
+    cell->delay = DELAY;
+    if( neighbor->type == T_ROBBO )
+    {
+        updateCell( neighbor, T_EXPLOSION, 0, 0 );
+    }
+    else
+    {
+        for( neighbor = neighbor + dir; neighbor->type == T_SPACE; neighbor += dir )
+            ;
+
+        if( neighbor->type == T_ROBBO )
+        {           
+            map.block = -dir;
+        }
+        else
+        {
+            map.block = 0;
+        }
+    }
+}
+
 VOID dupFrames( WORD from, WORD to )
 {
     types[ from ].base = types[ to ].base;
@@ -341,7 +427,7 @@ VOID initTypes( VOID )
 
     initType( T_SPACE, enterSpace, NULL, 1, 0 );
     initType( T_WALL, enterWall, NULL, 1, 0 );
-    initType( T_CAPSULE, NULL, NULL, 2, 0 );
+    initType( T_CAPSULE, enterCapsule, NULL, 2, 0 );
     initType( T_SCREW, enterScrew, NULL, 1, 0 );
     initType( T_KEY, enterKey, NULL, 1, 0 );
     initType( T_AMMO, enterAmmo, NULL, 1, 0 );
@@ -349,10 +435,11 @@ VOID initTypes( VOID )
     initType( T_DOOR, enterDoor, NULL, 1, 0 );
     initType( T_BOX, enterBox, NULL, 1, 0 );
     initType( T_WHEELED_BOX, enterBox, scanWheeledBox, 1, 0 );
-    initType( T_BOMB, NULL, NULL, 1, 0 );
+    initType( T_BOMB, enterBomb, NULL, 1, 0 );
+    initType( T_BOMB_EXPLODING, enterDebris, scanBomb, 0, 0 );
     initType( T_BAT, enterDebris, scanBat, 4, 0 );
     initType( T_DEBRIS, enterDebris, NULL, 1, 0 );
-    initType( T_ROBBO, enterDebris, scanRobbo, 2, 2 );
+    initType( T_ROBBO, enterRobbo, scanRobbo, 2, 2 );
     initType( T_BULLET, enterWall, scanBullet, 2, 2 );
     initType( T_FIRE, enterWall, scanFire, 3, 0 );
     initType( T_EXPLOSION, enterWall, scanExplosion, 3, 0 );
@@ -365,7 +452,8 @@ VOID initTypes( VOID )
     initType( T_BEAM, enterWall, NULL, 0, 2 );
     initType( T_STREAM, enterStream, scanStream, 0, 0 );
     
-    initType( T_MAGNET, NULL, NULL, 1, 1 );
+    initType( T_MAGNET_RIGHT, enterWall, scanMagnet, 1, 0 );
+    initType( T_MAGNET_LEFT, enterWall, scanMagnet, 1, 0 );
     initType( T_SURPRISE, NULL, NULL, 1, 0 );
     initType( T_BLANK, NULL, NULL, 1, 0 );
     sumBase();
@@ -374,6 +462,7 @@ VOID initTypes( VOID )
     types[ T_EXPLOSION ].frames = explosionFrames;
     types[ T_BULLET ].frames = &map.toggle;
 
+    dupFrames( T_BOMB_EXPLODING, T_BOMB );
     dupFrames( T_LASER, T_CANNON );
     dupFrames( T_BLASTER, T_CANNON );
     dupFrames( T_BEAM, T_BULLET );
@@ -409,6 +498,7 @@ VOID updateCell( Cell *cell, WORD type, WORD dir, WORD frame )
     cell->type = type;
     cell->dir = dir;
     cell->frame = frame;
+    cell->index = 0;
 
     if( types[ type ].scan )
     {

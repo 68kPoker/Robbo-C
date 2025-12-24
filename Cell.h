@@ -23,7 +23,7 @@ enum
 
     T_CAPSULE,
 
-    T_SCREW,    
+    T_SCREW,
     T_KEY,
     T_AMMO,
 
@@ -33,6 +33,7 @@ enum
     T_WHEELED_BOX,
 
     T_BOMB,
+    T_BOMB_EXPLODING,
     T_BAT,
 
     T_CANNON,
@@ -43,14 +44,15 @@ enum
 
     T_DEBRIS,
 
-    T_MAGNET,
+    T_MAGNET_RIGHT,
+    T_MAGNET_LEFT,
     T_BULLET,
     T_BEAM,
     T_BEAM_SHRINK,
     T_BEAM_EXTEND,
 
     T_ROBBO,
-    T_BLANK,    
+    T_BLANK,
     T_EXPLOSION,
     T_FIRE,
     T_STREAM,
@@ -82,6 +84,8 @@ typedef struct Map
     WORD toggle;
     struct BitMap *gfx;
     struct RastPort *rp;
+    WORD block;
+    BOOL done;
 } Map;
 
 typedef BOOL Enter( Cell *cell, WORD as, WORD dir, WORD frame );
