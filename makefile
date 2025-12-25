@@ -11,10 +11,12 @@ all: Robbo.exe
 .c.o:
   $(cc) $(cflags) $*.c
 
-Robbo.exe: Window.o Type.o Blitter.o
+Robbo.exe: Window.o Type.o Editor.o Blitter.o
   $(link) $(lflags) $@ $**
 
-Window.o: Window.h Cell.h Blitter.h
+Window.o: Window.h Cell.h Blitter.h Editor.h
+
+Editor.o: Editor.h
 
 Blitter.o: Blitter.h
 

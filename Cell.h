@@ -3,7 +3,7 @@
 #include <exec/types.h>
 #endif
 
-#define DELAY 4
+#define DELAY 6
 #define WIDTH 16
 #define HEIGHT 20
 
