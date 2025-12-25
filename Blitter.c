@@ -231,6 +231,106 @@ VOID drawTile( struct BitMap *gfx, WORD sx, WORD sy, struct BitMap *dest, WORD d
     DisownBlitter();
 }
 
+VOID setBG( struct BitMap *gfx, WORD sx, WORD sy, struct BitMap *dest, WORD dx, WORD dy, UWORD width, UWORD height, UBYTE minterm, UBYTE writeMask )
+{
+    REGISTER struct Custom *c = &custom;
+    UBYTE p;
+    PLANEPTR mask;
+    LONG gfxOffset, destOffset;
+    WORD gfxMod, destMod;
+    WORD span;
+    UBYTE depth;
+
+    OwnBlitter();
+
+    depth = dest->Depth - 1;
+
+    gfxOffset = sy * gfx->BytesPerRow + ( ( sx >> 4 ) << 1 );
+    destOffset = dy * dest->BytesPerRow + ( ( dx >> 4 ) << 1 );
+
+    span = width >> 4;
+
+    gfxMod = gfx->BytesPerRow - ( span << 1 );
+    destMod = dest->BytesPerRow - ( span << 1 );
+
+    mask = dest->Planes[ depth ] + destOffset;
+
+    writeMask &= ( 1 << depth ) - 1;
+
+    for( p = 0; writeMask; p++, writeMask >>= 1 )
+    {
+        if( writeMask & 1 )
+        {
+            WaitBlit();
+            c->bltcon0 = SRCA | SRCB | SRCC | DEST | minterm;
+            c->bltcon1 = 0;
+            c->bltapt = mask;
+            c->bltbpt = gfx->Planes[ p ] + gfxOffset;
+            c->bltcpt = dest->Planes[ p ] + destOffset;
+            c->bltdpt = dest->Planes[ p ] + destOffset;
+            c->bltamod = destMod;
+            c->bltbmod = gfxMod;
+            c->bltcmod = destMod;
+            c->bltdmod = destMod;
+            c->bltafwm = 0xFFFF;
+            c->bltalwm = 0xFFFF;
+            c->bltsize = ( height << HSIZEBITS ) | span;
+        }
+    }
+
+    DisownBlitter();
+}
+
+VOID drawBob( struct BitMap *gfx, WORD sx, WORD sy, struct BitMap *dest, WORD dx, WORD dy, UWORD width, UWORD height, UBYTE minterm, UBYTE writeMask )
+{
+    REGISTER struct Custom *c = &custom;
+    UBYTE p;
+    PLANEPTR mask;
+    LONG gfxOffset, destOffset;
+    WORD gfxMod, destMod;
+    WORD span;
+    UBYTE depth;
+
+    OwnBlitter();
+
+    depth = gfx->Depth - 1;
+
+    gfxOffset = sy * gfx->BytesPerRow + ( ( sx >> 4 ) << 1 );
+    destOffset = dy * dest->BytesPerRow + ( ( dx >> 4 ) << 1 );
+
+    span = width >> 4;
+
+    gfxMod = gfx->BytesPerRow - ( span << 1 );
+    destMod = dest->BytesPerRow - ( span << 1 );
+
+    mask = gfx->Planes[ depth ] + gfxOffset;
+
+    writeMask &= ( 1 << depth ) - 1;
+
+    for( p = 0; writeMask; p++, writeMask >>= 1 )
+    {
+        if( writeMask & 1 )
+        {
+            WaitBlit();
+            c->bltcon0 = SRCA | SRCB | SRCC | DEST | minterm;
+            c->bltcon1 = 0;
+            c->bltapt = mask;
+            c->bltbpt = gfx->Planes[ p ] + gfxOffset;
+            c->bltcpt = dest->Planes[ p ] + destOffset;
+            c->bltdpt = dest->Planes[ p ] + destOffset;
+            c->bltamod = gfxMod;
+            c->bltbmod = gfxMod;
+            c->bltcmod = destMod;
+            c->bltdmod = destMod;
+            c->bltafwm = 0xFFFF;
+            c->bltalwm = 0xFFFF;
+            c->bltsize = ( height << HSIZEBITS ) | span;
+        }
+    }
+
+    DisownBlitter();
+}
+
 VOID drawTileRastPort( struct BitMap *gfx, WORD sx, WORD sy, struct RastPort *rp, WORD dx, WORD dy, UWORD width, UWORD height, UBYTE minterm )
 {
     struct BitMap *dest = rp->BitMap;

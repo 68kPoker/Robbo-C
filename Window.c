@@ -16,20 +16,17 @@
 #include "Cell.h"
 #include "Blitter.h"
 #include "Window.h"
+#include "Editor.h"
 
 #define RGB(c) ((c)|((c)<<8)|((c)<<16)|((c)<<24))
 
 #define VERS 39L
 
-#define TILE_WIDTH  16
-#define TILE_HEIGHT 16
-
-#define VIEW_WIDTH  16
-#define VIEW_HEIGHT 12
-
 struct Library *IntuitionBase, *GfxBase, *LayersBase, *IFFParseBase;
 
 WORD tiles[ VIEW_HEIGHT ][ VIEW_WIDTH ];
+
+UWORD myPlanePick[ 60 ];
 
 struct Window *openWindow( struct Screen *s, struct Region **reg )
 {
@@ -80,7 +77,7 @@ VOID pasteTile( WORD type, WORD tile, struct Window *w, WORD x, WORD y )
 {
     struct RastPort *rp = w->RPort;
 
-    BltBitMapRastPort( map.gfx, ( tile % 20 ) * TILE_WIDTH, ( tile / 20 ) * TILE_HEIGHT, w->RPort, w->BorderLeft + x, w->BorderTop + y, TILE_WIDTH, TILE_HEIGHT, 0xc0 );
+    drawTileRastPort( map.gfx, ( tile % 20 ) * TILE_WIDTH, ( tile / 20 ) * TILE_HEIGHT, w->RPort, w->BorderLeft + x, w->BorderTop + y, TILE_WIDTH, TILE_HEIGHT, 0xc0 );
 }
 
 VOID drawMap( struct Window *w, WORD dx, WORD dy, BOOL force )
@@ -129,6 +126,10 @@ VOID drawMap( struct Window *w, WORD dx, WORD dy, BOOL force )
 
             if( tile != tiles[ y ][ x ] || force )
             {
+                UWORD prev = myPlanePick[ tiles[ y ][ x ] ], cur = myPlanePick[ tile ];
+
+                SetWriteMask( w->RPort, ( prev & 0xff ) | ( cur & 0xff ) | ( ( prev >> 8 ) ^ ( cur >> 8 ) ) );
+
                 tiles[ y ][ x ] = tile;
                 pasteTile( cell->type, tile, w, x * TILE_WIDTH, y * TILE_HEIGHT );
             }
@@ -144,23 +145,23 @@ VOID testMap( VOID )
     {
         "################",
         "#....#...SN....#",
-        "#.R..#.B.#..$$$#",
+        "#.R..#...#..$$$#",
         "#........#.#####",
         "###.##...#.#...#",
-        "#>....GGGS....A#",
-        "#M.......#######",
+        "#........S....A#",
+        "#>..GGGGG#######",
         "#.............[#",
         "##D######.######",
         "#.GGG...#.#...L#",
         "#GGG....#......#",
         "#....K..########",
-        "#...K.S........#",
-        "#.......#......#",
-        "#.......#..$$..#",
+        "#.B.K.S........#",
+        "#..............#",
+        "#.......#.#$$#.#",
         "#SSSGGSS#+####+#",
         "#.......###..###",
         "#..............#",
-        "#.............C#",
+        "#M............C#",
         "################",
     };
 
@@ -460,10 +461,11 @@ VOID freePicture( struct BitMap *bm, struct Screen *s )
 VOID drawPanel( struct Window *w )
 {
     WORD i, j;
+    WORD tab[] = { T_SCREW, T_KEY, T_AMMO };
 
     for( i = 0; i < 3; i++ )
     {
-        pasteTile( 0, 3 * 20 + i, w, VIEW_WIDTH * TILE_WIDTH, ( i + 1 ) * ( TILE_HEIGHT + 2 ) );
+        drawBob( map.gfx, ( types[ tab[ i ] ].base % 20 ) * TILE_WIDTH, ( types[ tab[ i ] ].base / 20 ) * TILE_HEIGHT, w->RPort->BitMap, VIEW_WIDTH * TILE_WIDTH, ( i + 1 ) * ( TILE_HEIGHT + 2 ), TILE_WIDTH, TILE_HEIGHT, 0xca, 0xff );
         for( j = 0; j < 3; j++ )
         {
             pasteTile( 0, 4 * 20 + j, w, VIEW_WIDTH * TILE_WIDTH + TILE_WIDTH * ( j + 1 ), ( i + 1 ) * ( TILE_HEIGHT + 2 ) );
@@ -504,6 +506,18 @@ VOID updatePanel( struct Window *w )
     }
 }
 
+VOID prepBG( VOID )
+{
+    WORD i;
+
+    for( i = 1; i < 60; i++ )
+    {
+        setBG( map.gfx, 0, 0, map.gfx, ( i % 20 ) * TILE_WIDTH, ( i / 20 ) * TILE_HEIGHT, TILE_WIDTH, TILE_HEIGHT, ABC | ANBC | NABC | NABNC, 0xff );
+    }
+
+    planePickArray( map.gfx, TILE_WIDTH, TILE_HEIGHT, 20, 3, myPlanePick, FALSE );
+}
+
 int main( void )
 {
     struct Screen *s;
@@ -520,6 +534,7 @@ int main( void )
                 {
                     if( map.gfx = readPicture( "Robbo.iff", &s ) )
                     {
+                        prepBG();
                         if( w = openWindow( s, &reg ) )
                         {
                             BOOL done = FALSE;
@@ -527,6 +542,7 @@ int main( void )
                             WORD i;
                             BOOL view = FALSE;
                             BYTE dir = 0;
+                            WORD curType = T_BOX, curDir = 0;
 
                             initTypes();
                             initMap();
@@ -534,12 +550,13 @@ int main( void )
 
                             drawMap( w, dx, dy, TRUE );
                             drawPanel( w );
+                            drawSelection( w );
                             WaitBlit();
                             ScreenToFront( s );
                             while( !done && !map.done )
                             {
                                 ULONG mask = 1L << w->UserPort->mp_SigBit;
-                                WaitTOF();
+                                
                                 scanMap();
 
                                 if( view )
@@ -569,6 +586,7 @@ int main( void )
                                     dy--;
                                 }
 
+                                WaitTOF();
                                 drawMap( w, dx, dy, FALSE );
                                 updatePanel( w );
                                 if( SetSignal( 0L, mask ) & mask )
@@ -586,11 +604,32 @@ int main( void )
 
                                         if( cls == IDCMP_MOUSEBUTTONS )
                                         {
-                                            done = TRUE;
+                                            WORD x = mx / TILE_WIDTH, y = my / TILE_HEIGHT;
+
+                                            if( code == IECODE_LBUTTON )
+                                            {
+                                                if( x >= 0 && x < VIEW_WIDTH && y >= 0 && y < VIEW_HEIGHT )
+                                                {
+                                                    updateCell( &map.map[ y + dy ][ x + dx ], curType, curDir, 0 );
+                                                }
+                                                else if( y == VIEW_HEIGHT + 1 )
+                                                {
+                                                    curType = ed[ x ];
+                                                    curDir = RIGHT;
+                                                }
+                                            }
+                                        }
+                                        else if( cls == IDCMP_MOUSEMOVE )
+                                        {
+
                                         }
                                         else if( cls == IDCMP_RAWKEY )
                                         {
-                                            if( code == LEFT_KEY )
+                                            if( code == ESC_KEY )
+                                            {
+                                                done = TRUE;
+                                            }
+                                            else if( code == LEFT_KEY )
                                             {
                                                dir = LEFT;
                                             }
@@ -601,7 +640,7 @@ int main( void )
                                                     dir = 0;
                                                 }
                                             }
-                                            if( code == RIGHT_KEY )
+                                            else if( code == RIGHT_KEY )
                                             {
                                                 dir = RIGHT;
                                             }
@@ -612,7 +651,7 @@ int main( void )
                                                     dir = 0;
                                                 }
                                             }
-                                            if( code == UP_KEY )
+                                            else if( code == UP_KEY )
                                             {
                                                 dir = UP;
                                             }
@@ -623,7 +662,7 @@ int main( void )
                                                     dir = 0;
                                                 }
                                             }
-                                            if( code == DOWN_KEY )
+                                            else if( code == DOWN_KEY )
                                             {
                                                 dir = DOWN;
                                             }

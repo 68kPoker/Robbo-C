@@ -350,7 +350,7 @@ STATIC BOOL enterCapsule( Cell *cell, WORD as, WORD dir, WORD frame )
     {
         if( map.collected >= map.required )
         {
-            map.done = TRUE;            
+            map.done = TRUE;
         }
     }
     return( FALSE );
@@ -367,9 +367,9 @@ STATIC BOOL enterBomb( Cell *cell, WORD as, WORD dir, WORD frame )
             return( TRUE );
         }
     }
-    else if( as == T_BULLET || as == T_STREAM || as == T_EXPLOSION )
+    else if( as == T_BULLET || as == T_BEAM_EXTEND || as == T_STREAM || as == T_EXPLOSION )
     {
-        updateCell( cell, T_BOMB_EXPLODING, 0, 0 );        
+        updateCell( cell, T_BOMB_EXPLODING, 0, 0 );
     }
     return( FALSE );
 }
@@ -380,12 +380,15 @@ STATIC VOID scanBomb( Cell *cell )
     WORD i;
 
     cell->delay = DELAY;
-    
+
     for( i = 0; i < 3; i++ )
     {
-        enterCell( cell + neighbor[ cell->index + i - 1 ], T_EXPLOSION, neighbor[ cell->index + i - 1 ], 0 );
+        enterCell( cell + neighbor[ cell->index + i ], T_EXPLOSION, neighbor[ cell->index + i ], 0 );
     }
-    cell->index += 3;
+    if( ( cell->index += 3 ) == 9 )
+    {
+        cell->index = 0;
+    }
 }
 
 STATIC VOID scanMagnet( Cell *cell )
@@ -400,7 +403,7 @@ STATIC VOID scanMagnet( Cell *cell )
     }
     else
     {
-        for( neighbor = neighbor + dir; neighbor->type == T_SPACE; neighbor += dir )
+        for( ; neighbor->type == T_SPACE; neighbor += dir )
             ;
 
         if( neighbor->type == T_ROBBO )
@@ -424,7 +427,7 @@ VOID dupFrames( WORD from, WORD to )
 
 VOID initTypes( VOID )
 {
-    static WORD explosionFrames[ 5 ] = { 0, 1, 2, 1, 0 }, fireFrames[ 3 ] = { 0, 1, 2 };
+    static WORD explosionFrames[ 5 ] = { 0, 1, 2, 3, 4 }, fireFrames[ 3 ] = { 0, 1, 2 };
 
     initType( T_SPACE, enterSpace, NULL, 1, 0 );
     initType( T_WALL, enterWall, NULL, 1, 0 );
@@ -443,7 +446,7 @@ VOID initTypes( VOID )
     initType( T_ROBBO, enterRobbo, scanRobbo, 2, 2 );
     initType( T_BULLET, enterWall, scanBullet, 2, 2 );
     initType( T_FIRE, enterWall, scanFire, 3, 0 );
-    initType( T_EXPLOSION, enterWall, scanExplosion, 3, 0 );
+    initType( T_EXPLOSION, enterWall, scanExplosion, 5, 0 );
     initType( T_CANNON, enterWall, scanCannon, 1, 2 );
     initType( T_LASER, enterWall, scanLaser, 0, 2 );
     initType( T_BLASTER, enterWall, scanBlaster, 0, 2 );
