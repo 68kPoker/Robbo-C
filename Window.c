@@ -39,14 +39,14 @@ struct Window *openWindow( struct Screen *s, struct Region **reg )
         WA_Width, s->Width,
         WA_Height, s->Height,
         WA_ScreenTitle, "RobboC (c)2025 Robert Szacki",
-        WA_IDCMP, IDCMP_MOUSEMOVE | IDCMP_MOUSEBUTTONS | IDCMP_RAWKEY,
+        WA_IDCMP, IDCMP_MOUSEMOVE | IDCMP_MOUSEBUTTONS | IDCMP_RAWKEY | IDCMP_MENUPICK,
         WA_ReportMouse, TRUE,
         WA_Activate, TRUE,
-        WA_SimpleRefresh, TRUE,
+        WA_SmartRefresh, TRUE,
         WA_BackFill, LAYERS_NOBACKFILL,
         WA_Borderless, TRUE,
         WA_Backdrop, TRUE,
-        WA_RMBTrap, TRUE,
+        WA_RMBTrap, FALSE,
         TAG_DONE ) )
     {
         if( *reg = NewRegion() )
@@ -77,7 +77,10 @@ VOID pasteTile( WORD type, WORD tile, struct Window *w, WORD x, WORD y )
 {
     struct RastPort *rp = w->RPort;
 
+    BltBitMap( map.back, ( tile % 20 ) * TILE_WIDTH, ( tile / 20 ) * TILE_HEIGHT, w->RPort->BitMap, w->BorderLeft + x, w->BorderTop + y, TILE_WIDTH, TILE_HEIGHT, 0xc0, 0xff, NULL );
+#if 0
     drawTileRastPort( map.gfx, ( tile % 20 ) * TILE_WIDTH, ( tile / 20 ) * TILE_HEIGHT, w->RPort, w->BorderLeft + x, w->BorderTop + y, TILE_WIDTH, TILE_HEIGHT, 0xc0 );
+#endif
 }
 
 VOID drawMap( struct Window *w, WORD dx, WORD dy, BOOL force )
@@ -202,7 +205,7 @@ VOID testMap( VOID )
     map.pos = 2 * WIDTH + 2;
     map.map[ 2 ][ 4 ].type = T_SCREW;
     map.map[ 4 ][ 2 ].type = T_SCREW;
-    for(i = 0; i <= 5; i++ )
+    for( i = 0; i <= 5; i++ )
     {
         map.map[ 6 ][ i ].type = T_WALL;
         map.map[ i ][ 5 ].type = T_WALL;
@@ -233,7 +236,7 @@ VOID testMap( VOID )
     map.map[ 12 ][ 12 ].dir = UP;
     map.map[ 12 ][ 14 ].type = T_BAT;
     map.map[ 12 ][ 14 ].dir = DOWN;
-        
+
     map.map[ 7 ][ 14 ].type = T_KEY;
 #endif
 }
@@ -346,6 +349,65 @@ struct BitMap *unpackPicture( struct BitMapHeader *bmhd, BYTE *buffer, LONG size
     }
 }
 
+struct Screen *openScreen( struct IFFHandle *iff, struct BitMapHeader *bmhd )
+{
+    struct StoredProperty *sp;
+    ULONG srcID, monID, modeID;
+    UBYTE *cmap;
+    WORD count;
+    struct Screen *pubs, *s = NULL;
+
+    if( sp = FindProp( iff, ID_ILBM, ID_CAMG ) )
+    {
+        srcID = *( ULONG * )sp->sp_Data;
+        if( sp = FindProp( iff, ID_ILBM, ID_CMAP ) )
+        {
+            cmap = ( UBYTE * )sp->sp_Data;
+            count = sp->sp_Size / 3;
+            if( pubs = LockPubScreen( NULL ) )
+            {
+                monID = GetVPModeID( &pubs->ViewPort ) & MONITOR_ID_MASK;
+
+                UnlockPubScreen( NULL, pubs );
+                modeID = BestModeID(
+                    BIDTAG_SourceID, srcID,
+                    BIDTAG_MonitorID, monID,
+                    BIDTAG_Depth, bmhd->bmh_Depth,
+                    TAG_DONE );
+                if( modeID != INVALID_ID )
+                {
+                    if( s = OpenScreenTags( NULL,
+                        SA_DisplayID, modeID,
+                        SA_Depth, bmhd->bmh_Depth,
+                        SA_Interleaved, TRUE,
+                        SA_ColorMapEntries, count,
+                        SA_Quiet, TRUE,
+                        SA_BackFill, LAYERS_NOBACKFILL,
+                        SA_Title, "RobboC (c)2025 Robert Szacki",
+                        SA_ShowTitle, FALSE,
+                        SA_Exclusive, TRUE,
+                        SA_Behind, TRUE,
+                        SA_BlockPen, 26,
+                        SA_DetailPen, 15,
+                        TAG_DONE ) )
+                    {
+                        WORD i;
+                        for( i = 0; i < count; i++ )
+                        {
+                            UBYTE red = *cmap++, green = *cmap++, blue = *cmap++;
+
+                            SetRGB32CM( s->ViewPort.ColorMap, i, RGB( red ), RGB( green ), RGB( blue ) );
+                        }
+                        MakeScreen( s );
+                        RethinkDisplay();
+                    }
+                }
+            }
+        }
+    }
+    return( s );
+}
+
 struct BitMap *readPicture( STRPTR name, struct Screen **s )
 {
     struct IFFHandle *iff;
@@ -353,10 +415,6 @@ struct BitMap *readPicture( STRPTR name, struct Screen **s )
     struct BitMap *bm = NULL;
     struct StoredProperty *sp;
     struct BitMapHeader *bmhd;
-    ULONG srcID, monID, modeID;
-    UBYTE *cmap;
-    WORD count;
-    struct Screen *pubs;
     struct ContextNode *cn;
     BYTE *buffer;
     LONG size;
@@ -372,72 +430,35 @@ struct BitMap *readPicture( STRPTR name, struct Screen **s )
                 {
                     if( StopChunk( iff, ID_ILBM, ID_BODY ) == 0 )
                     {
-                        if( ParseIFF( iff, IFFPARSE_SCAN ) == 0 )
+                        if( StopOnExit( iff, ID_ILBM, ID_FORM ) == 0 )
                         {
-                            if( sp = FindProp( iff, ID_ILBM, ID_BMHD ) )
+                            if( ParseIFF( iff, IFFPARSE_SCAN ) == 0 )
                             {
-                                bmhd = ( struct BitMapHeader * )sp->sp_Data;
-                                if( sp = FindProp( iff, ID_ILBM, ID_CAMG ) )
+                                if( sp = FindProp( iff, ID_ILBM, ID_BMHD ) )
                                 {
-                                    srcID = *( ULONG * )sp->sp_Data;
-                                    if( sp = FindProp( iff, ID_ILBM, ID_CMAP ) )
+                                    bmhd = ( struct BitMapHeader * )sp->sp_Data;
+
+                                    if( cn = CurrentChunk( iff ) )
                                     {
-                                        cmap = ( UBYTE * )sp->sp_Data;
-                                        count = sp->sp_Size / 3;
-                                        if( pubs = LockPubScreen( NULL ) )
+                                        size = cn->cn_Size;
+                                        if( buffer = AllocMem( size, MEMF_PUBLIC ) )
                                         {
-                                            monID = GetVPModeID( &pubs->ViewPort ) & MONITOR_ID_MASK;
-
-                                            UnlockPubScreen( NULL, pubs );
-                                            modeID = BestModeID(
-                                                BIDTAG_SourceID, srcID,
-                                                BIDTAG_MonitorID, monID,
-                                                BIDTAG_Depth, bmhd->bmh_Depth,
-                                                TAG_DONE );
-                                            if( modeID != INVALID_ID )
+                                            if( ReadChunkBytes( iff, buffer, size ) == size )
                                             {
-                                                if( *s = OpenScreenTags( NULL,
-                                                    SA_DisplayID, modeID,
-                                                    SA_Depth, bmhd->bmh_Depth,
-                                                    SA_Interleaved, TRUE,
-                                                    SA_ColorMapEntries, count,
-                                                    SA_Quiet, TRUE,
-                                                    SA_BackFill, LAYERS_NOBACKFILL,
-                                                    SA_Title, "RobboC (c)2025 Robert Szacki",
-                                                    SA_ShowTitle, FALSE,
-                                                    SA_Exclusive, TRUE,
-                                                    SA_Behind, TRUE,
-                                                    TAG_DONE ) )
+                                                if( bm = unpackPicture( bmhd, buffer, size ) )
                                                 {
-                                                    WORD i;
-                                                    for( i = 0; i < count; i++ )
+                                                    if( s )
                                                     {
-                                                        UBYTE red = *cmap++, green = *cmap++, blue = *cmap++;
-
-                                                        SetRGB32CM( ( *s )->ViewPort.ColorMap, i, RGB( red ), RGB( green ), RGB( blue ) );
-                                                    }
-                                                    MakeScreen( *s );
-                                                    RethinkDisplay();
-                                                    if( cn = CurrentChunk( iff ) )
-                                                    {
-                                                        size = cn->cn_Size;
-                                                        if( buffer = AllocMem( size, MEMF_PUBLIC ) )
+                                                        if( !( *s = openScreen( iff, bmhd ) ) )
                                                         {
-                                                            if( ReadChunkBytes( iff, buffer, size ) == size )
-                                                            {
-                                                                bm = unpackPicture( bmhd, buffer, size );
-                                                            }
-                                                            FreeMem( buffer, size );
+                                                            FreeBitMap( bm );
+                                                            bm = NULL;
                                                         }
-                                                    }
-                                                    if( !bm )
-                                                    {
-                                                        CloseScreen( *s );
                                                     }
                                                 }
                                             }
+                                            FreeMem( buffer, size );
                                         }
-
                                     }
                                 }
                             }
@@ -464,20 +485,9 @@ VOID drawPanel( struct Window *w )
     WORD i, j;
     WORD tab[] = { T_SCREW, T_KEY, T_AMMO };
 
-#if 0
-    SetAPen( w->RPort, 26 );
-    RectFill( w->RPort, VIEW_WIDTH * TILE_WIDTH + 1, 0, w->Width - 1, ( 3 + 1 ) * ( TILE_HEIGHT + 2 ) );
+    BltBitMap( map.back, 0, 0, w->RPort->BitMap, 0, 0, 320, 256, 0xc0, 0xff, NULL );
 
-    for( i = 0; i < 3; i++ )
-    {
-        drawBob( map.gfx, ( types[ tab[ i ] ].base % 20 ) * TILE_WIDTH, ( types[ tab[ i ] ].base / 20 ) * TILE_HEIGHT, w->RPort->BitMap, VIEW_WIDTH * TILE_WIDTH, ( i + 1 ) * ( TILE_HEIGHT + 2 ), TILE_WIDTH, TILE_HEIGHT, 0xca, 0xff );
-        for( j = 0; j < 3; j++ )
-        {
-            pasteTile( 0, 4 * 20 + j, w, VIEW_WIDTH * TILE_WIDTH + TILE_WIDTH * ( j + 1 ), ( i + 1 ) * ( TILE_HEIGHT + 2 ) );
-        }
-    }
-#endif
-    drawTileRastPort( map.gfx, 0, 48, w->RPort, 256, 0, 64, 192, 0xc0 );
+    drawTile( map.gfx, 0, 0, map.back, 0, 0, 320, 48, 0xc0, 0xff );
 }
 
 VOID updatePanel( struct Window *w )
@@ -539,171 +549,179 @@ int main( void )
             {
                 if( IFFParseBase = OpenLibrary( "iffparse.library", VERS ) )
                 {
-                    if( map.gfx = readPicture( "Robbo.iff", &s ) )
+                    if( map.back = readPicture( "Back.iff", &s ) )
                     {
-                        prepBG();
-                        if( w = openWindow( s, &reg ) )
+                        if( map.gfx = readPicture( "Gfx.iff", NULL ) )
                         {
-                            BOOL done = FALSE;
-                            WORD dx = 0, dy = 0, tx = 0, ty = 0;
-                            WORD i;
-                            BOOL view = FALSE;
-                            BYTE dir = 0;
-                            WORD curType = T_BOX, curDir = 0;
-
-                            initTypes();
-                            initMap();
-                            testMap();
-
-                            drawMap( w, dx, dy, TRUE );
-                            drawPanel( w );
-                            drawSelection( w );
-                            WaitBlit();
-                            ScreenToFront( s );
-                            while( !done && !map.done )
+                            prepBG();
+                            if( w = openWindow( s, &reg ) )
                             {
-                                ULONG mask = 1L << w->UserPort->mp_SigBit;
-                                
-                                scanMap();
+                                BOOL done = FALSE;
+                                WORD dx = 0, dy = 0, tx = 0, ty = 0;
+                                WORD i;
+                                BOOL view = FALSE;
+                                BYTE dir = 0;
+                                WORD curType = T_BOX, curDir = 0;
 
-                                if( view )
-                                {
-                                    ty += dir / WIDTH;
-                                }
-                                else if( ( ( map.pos / WIDTH ) - dy ) < 1 || ( ( map.pos / WIDTH ) - dy ) > VIEW_HEIGHT - 2 )
-                                {
-                                    ty = ( map.pos / WIDTH ) - ( VIEW_HEIGHT / 2 );
-                                }
+                                initTypes();
+                                initMap();
+                                testMap();
 
-                                if( ty < 0 )
-                                {
-                                    ty = 0;
-                                }
-                                else if( ty > HEIGHT - VIEW_HEIGHT )
-                                {
-                                    ty = HEIGHT - VIEW_HEIGHT;
-                                }
+                                drawPanel( w );
+                                drawMap( w, dx, dy, TRUE );
 
-                                if( ty > dy )
+                                drawSelection( w );
+                                WaitBlit();
+                                ScreenToFront( s );
+                                while( !done && !map.done )
                                 {
-                                    dy++;
-                                }
-                                else if( ty < dy )
-                                {
-                                    dy--;
-                                }
+                                    ULONG mask = 1L << w->UserPort->mp_SigBit;
 
-                                WaitTOF();
-                                drawMap( w, dx, dy, FALSE );
-                                updatePanel( w );
-                                if( SetSignal( 0L, mask ) & mask )
-                                {
-                                    struct IntuiMessage *msg;
-                                    while( msg = ( struct IntuiMessage * )GetMsg( w->UserPort ) )
+                                    scanMap();
+
+                                    if( view )
                                     {
-                                        ULONG cls = msg->Class;
-                                        UWORD code = msg->Code;
-                                        WORD mx = msg->MouseX;
-                                        WORD my = msg->MouseY;
-                                        UWORD qual = msg->Qualifier;
+                                        ty += dir / WIDTH;
+                                    }
+                                    else if( ( ( map.pos / WIDTH ) - dy ) < 1 || ( ( map.pos / WIDTH ) - dy ) > VIEW_HEIGHT - 2 )
+                                    {
+                                        ty = ( map.pos / WIDTH ) - ( VIEW_HEIGHT / 2 );
+                                    }
 
-                                        ReplyMsg( ( struct Message * )msg );
+                                    if( ty < 0 )
+                                    {
+                                        ty = 0;
+                                    }
+                                    else if( ty > HEIGHT - VIEW_HEIGHT )
+                                    {
+                                        ty = HEIGHT - VIEW_HEIGHT;
+                                    }
 
-                                        if( cls == IDCMP_MOUSEBUTTONS )
+                                    if( ty > dy )
+                                    {
+                                        dy++;
+                                    }
+                                    else if( ty < dy )
+                                    {
+                                        dy--;
+                                    }
+
+                                    WaitTOF();
+                                    drawMap( w, dx, dy, FALSE );
+                                    updatePanel( w );
+                                    if( SetSignal( 0L, mask ) & mask )
+                                    {
+                                        struct IntuiMessage *msg;
+                                        while( msg = ( struct IntuiMessage * )GetMsg( w->UserPort ) )
                                         {
-                                            WORD x = mx / TILE_WIDTH, y = my / TILE_HEIGHT;
+                                            ULONG cls = msg->Class;
+                                            UWORD code = msg->Code;
+                                            WORD mx = msg->MouseX;
+                                            WORD my = msg->MouseY;
+                                            UWORD qual = msg->Qualifier;
 
-                                            if( code == IECODE_LBUTTON )
-                                            {
-                                                if( x >= 0 && x < VIEW_WIDTH && y >= 0 && y < VIEW_HEIGHT )
-                                                {
-                                                    updateCell( &map.map[ y + dy ][ x + dx ], curType, curDir, 0 );
-                                                }
-                                                else if( y == VIEW_HEIGHT + 1 )
-                                                {
-                                                    curType = ed[ x ];
-                                                    curDir = RIGHT;
-                                                }
-                                            }
-                                        }
-                                        else if( cls == IDCMP_MOUSEMOVE )
-                                        {
+                                            ReplyMsg( ( struct Message * )msg );
 
-                                        }
-                                        else if( cls == IDCMP_RAWKEY )
-                                        {
-                                            if( code == ESC_KEY )
+                                            if( cls == IDCMP_MENUPICK )
                                             {
-                                                done = TRUE;
                                             }
-                                            else if( code == LEFT_KEY )
+                                            else if( cls == IDCMP_MOUSEBUTTONS )
                                             {
-                                               dir = LEFT;
-                                            }
-                                            else if( code == ( LEFT_KEY | IECODE_UP_PREFIX ) )
-                                            {
-                                                if( dir == LEFT )
+                                                WORD x = mx / TILE_WIDTH, y = my / TILE_HEIGHT;
+
+                                                if( code == IECODE_LBUTTON )
                                                 {
-                                                    dir = 0;
+                                                    if( x >= 0 && x < VIEW_WIDTH && y >= 0 && y < VIEW_HEIGHT )
+                                                    {
+                                                        updateCell( &map.map[ y + dy ][ x + dx ], curType, curDir, 0 );
+                                                    }
+                                                    else if( y == VIEW_HEIGHT + 1 )
+                                                    {
+                                                        curType = ed[ x ];
+                                                        curDir = RIGHT;
+                                                    }
                                                 }
                                             }
-                                            else if( code == RIGHT_KEY )
+                                            else if( cls == IDCMP_MOUSEMOVE )
                                             {
-                                                dir = RIGHT;
+
                                             }
-                                            else if( code == ( RIGHT_KEY | IECODE_UP_PREFIX ) )
+                                            else if( cls == IDCMP_RAWKEY )
                                             {
-                                                if( dir == RIGHT )
+                                                if( code == ESC_KEY )
                                                 {
-                                                    dir = 0;
+                                                    done = TRUE;
                                                 }
-                                            }
-                                            else if( code == UP_KEY )
-                                            {
-                                                dir = UP;
-                                            }
-                                            else if( code == ( UP_KEY | IECODE_UP_PREFIX ) )
-                                            {
-                                                if( dir == UP )
+                                                else if( code == LEFT_KEY )
                                                 {
-                                                    dir = 0;
+                                                    dir = LEFT;
                                                 }
-                                            }
-                                            else if( code == DOWN_KEY )
-                                            {
-                                                dir = DOWN;
-                                            }
-                                            else if( code == ( DOWN_KEY | IECODE_UP_PREFIX ) )
-                                            {
-                                                if( dir == DOWN )
+                                                else if( code == ( LEFT_KEY | IECODE_UP_PREFIX ) )
                                                 {
-                                                    dir = 0;
+                                                    if( dir == LEFT )
+                                                    {
+                                                        dir = 0;
+                                                    }
                                                 }
-                                            }
-                                            if( qual & ( IEQUALIFIER_LSHIFT | IEQUALIFIER_RSHIFT ) )
-                                            {
-                                                map.fire = TRUE;
-                                            }
-                                            else
-                                            {
-                                                map.fire = FALSE;
-                                            }
-                                            if( qual & ( IEQUALIFIER_LALT | IEQUALIFIER_RALT ) )
-                                            {
-                                                view = TRUE;
-                                            }
-                                            else
-                                            {
-                                                view = FALSE;
-                                                map.dir = dir;
+                                                else if( code == RIGHT_KEY )
+                                                {
+                                                    dir = RIGHT;
+                                                }
+                                                else if( code == ( RIGHT_KEY | IECODE_UP_PREFIX ) )
+                                                {
+                                                    if( dir == RIGHT )
+                                                    {
+                                                        dir = 0;
+                                                    }
+                                                }
+                                                else if( code == UP_KEY )
+                                                {
+                                                    dir = UP;
+                                                }
+                                                else if( code == ( UP_KEY | IECODE_UP_PREFIX ) )
+                                                {
+                                                    if( dir == UP )
+                                                    {
+                                                        dir = 0;
+                                                    }
+                                                }
+                                                else if( code == DOWN_KEY )
+                                                {
+                                                    dir = DOWN;
+                                                }
+                                                else if( code == ( DOWN_KEY | IECODE_UP_PREFIX ) )
+                                                {
+                                                    if( dir == DOWN )
+                                                    {
+                                                        dir = 0;
+                                                    }
+                                                }
+                                                if( qual & ( IEQUALIFIER_LSHIFT | IEQUALIFIER_RSHIFT ) )
+                                                {
+                                                    map.fire = TRUE;
+                                                }
+                                                else
+                                                {
+                                                    map.fire = FALSE;
+                                                }
+                                                if( qual & ( IEQUALIFIER_LALT | IEQUALIFIER_RALT ) )
+                                                {
+                                                    view = TRUE;
+                                                }
+                                                else
+                                                {
+                                                    view = FALSE;
+                                                    map.dir = dir;
+                                                }
                                             }
                                         }
                                     }
                                 }
+                                closeWindow( w, reg );
                             }
-                            closeWindow( w, reg );
+                            FreeBitMap( map.gfx );
                         }
-                        freePicture( map.gfx, s );
+                        freePicture( map.back, s );
                     }
                     CloseLibrary( IFFParseBase );
                 }
