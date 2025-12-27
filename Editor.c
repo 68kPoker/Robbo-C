@@ -35,10 +35,8 @@ VOID drawSelection( struct Window *w )
 {
     WORD i;
 
-#if 0
     for( i = 0; i < E_COUNT; i++ )
-    {
-        drawBob( map.gfx, ( types[ ed[ i ] ].base % 20 ) * TILE_WIDTH, ( types[ ed[ i ] ].base / 20 ) * TILE_HEIGHT, w->RPort->BitMap, i * TILE_WIDTH, ( VIEW_HEIGHT + 1 ) * TILE_HEIGHT, TILE_WIDTH, TILE_HEIGHT, 0xca, 0xff );
+    {        
+        drawBob( map.gfx, ( types[ ed[ i ] ].base % 20 ) * TILE_WIDTH, ( types[ ed[ i ] ].base / 20 ) * TILE_HEIGHT, w->RPort, 1 + ( i % 5 ) * ( TILE_WIDTH + 1 ), 1 + ( i / 5 ) * ( TILE_HEIGHT + 1 ), TILE_WIDTH, TILE_HEIGHT, 0xca, 0xff );
     }
-#endif
 }

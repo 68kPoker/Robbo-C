@@ -502,6 +502,7 @@ VOID initMap( VOID )
     }
     map.map[ 1 ][ 1 ].type = T_ROBBO;
     map.map[ 1 ][ 1 ].dir = 0;
+    map.pos = 1 * WIDTH + 1;
 }
 
 VOID updateCell( Cell *cell, WORD type, WORD dir, WORD frame )

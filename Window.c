@@ -33,30 +33,31 @@ UWORD myPlanePick[ 60 ];
 struct NewMenu nm[] =
 {
     { NM_TITLE, "Game", 0, 0, 0, 0 },
-    { NM_ITEM, "Restart...", "R", 0, 0, 0 },
+    { NM_ITEM, "Restart...", "A", 0, 0, 0 },
     { NM_ITEM, NM_BARLABEL, 0, 0, 0, 0 },
     { NM_ITEM, "Quit...   ", "Q", 0, 0, 0 },
     { NM_TITLE, "Settings", 0, 0, 0, 0 },
     { NM_ITEM, "Show Title    ", "T", MENUTOGGLE | CHECKIT | NM_ITEMDISABLED, 0, 0 },
     { NM_ITEM, NM_BARLABEL, 0, 0, 0, 0 },
-    { NM_ITEM, "Construct Mode", "C", MENUTOGGLE | CHECKIT, 0, 0 },
+    { NM_ITEM, "Construct Mode", "M", MENUTOGGLE | CHECKIT, 0, 0 },
     { NM_TITLE, "Construct", 0, NM_MENUDISABLED, 0, 0 },
     { NM_ITEM, "Clear...   ", 0, 0, 0, 0 },
     { NM_ITEM, "Restore... ", "O", 0, 0, 0 },
     { NM_ITEM, "Save       ", "S", 0, 0, 0 },
-    { NM_ITEM, NM_BARLABEL, 0, 0, 0, 0 },    
+    { NM_ITEM, NM_BARLABEL, 0, 0, 0, 0 },
     { NM_ITEM, "Show Tools ", "B", MENUTOGGLE | CHECKIT | NM_ITEMDISABLED, 0, 0 },
     { NM_ITEM, "Show Cursor", "C", MENUTOGGLE | CHECKIT, 0, 0 },
     { NM_ITEM, NM_BARLABEL, 0, 0, 0, 0 },
     { NM_ITEM, "Robbo      ", "H", 0, 0, 0 },
     { NM_ITEM, "Direction  ", 0, 0, 0, 0 },
     { NM_SUB, "Left ", "L", CHECKIT | CHECKED, ~01, 0 },
-    { NM_SUB, "Right", "H", CHECKIT, ~02, 0 },
+    { NM_SUB, "Right", "R", CHECKIT, ~02, 0 },
     { NM_SUB, "Up   ", "U", CHECKIT, ~04, 0 },
     { NM_SUB, "Down ", "D", CHECKIT, ~010, 0 },
+#if 0
     { NM_TITLE, "Select", 0, NM_MENUDISABLED, 0, 0 },
-    { NM_ITEM, "Space    ", "0", CHECKIT, ~01, 0 },    
-    { NM_ITEM, "Wall     ", "1", CHECKIT, ~02, 0 },    
+    { NM_ITEM, "Space    ", "0", CHECKIT, ~01, 0 },
+    { NM_ITEM, "Wall     ", "1", CHECKIT, ~02, 0 },
     { NM_ITEM, "Capsule  ", "2", CHECKIT, ~04, 0 },
     { NM_ITEM, "Screw    ", "3", CHECKIT | CHECKED, ~010, 0 },
     { NM_ITEM, "Key      ", "4", CHECKIT, ~020, 0 },
@@ -73,10 +74,11 @@ struct NewMenu nm[] =
     { NM_ITEM, "Debris   ", "^", CHECKIT, ~0100000, 0 },
     { NM_ITEM, "Magnet ] ", "&", CHECKIT, ~0200000, 0 },
     { NM_ITEM, "Magnet [ ", "*", CHECKIT, ~0400000, 0 },
+#endif
     { NM_END }
 };
 
-WORD pens[ NUMDRIPENS + 1 ] = { 0, 24, 0, 2, 0, 3, 2, 24, 2, 15, 26, 15, ~0 };
+WORD pens[ NUMDRIPENS + 1 ] = { 0, 25, 0, 2, 0, 3, 2, 25, 2, 0, 25, 0, ~0 };
 
 struct Window *openWindow( struct Screen *s, struct Region **reg )
 {
@@ -89,7 +91,7 @@ struct Window *openWindow( struct Screen *s, struct Region **reg )
         WA_Width, s->Width,
         WA_Height, s->Height,
         WA_ScreenTitle, "RobboC (c)2025 Robert Szacki",
-        WA_IDCMP, IDCMP_MOUSEMOVE | IDCMP_MOUSEBUTTONS | IDCMP_RAWKEY | IDCMP_MENUPICK,
+        WA_IDCMP, IDCMP_MOUSEMOVE | IDCMP_MOUSEBUTTONS | IDCMP_RAWKEY | IDCMP_MENUPICK | IDCMP_MENUVERIFY,
         WA_ReportMouse, TRUE,
         WA_Activate, TRUE,
         WA_SmartRefresh, TRUE,
@@ -127,11 +129,11 @@ VOID closeWindow( struct Window *w, struct Region *reg )
 VOID pasteTile( WORD type, WORD tile, struct Window *w, WORD x, WORD y )
 {
     struct RastPort *rp = w->RPort;
-
-    BltBitMap( map.back, ( tile % 20 ) * TILE_WIDTH, ( tile / 20 ) * TILE_HEIGHT, w->RPort->BitMap, w->BorderLeft + x, w->BorderTop + y, TILE_WIDTH, TILE_HEIGHT, 0xc0, 0xff, NULL );
 #if 0
-    drawTileRastPort( map.gfx, ( tile % 20 ) * TILE_WIDTH, ( tile / 20 ) * TILE_HEIGHT, w->RPort, w->BorderLeft + x, w->BorderTop + y, TILE_WIDTH, TILE_HEIGHT, 0xc0 );
+    BltBitMap( map.back, ( tile % 20 ) * TILE_WIDTH, ( tile / 20 ) * TILE_HEIGHT, w->RPort->BitMap, w->BorderLeft + x, w->BorderTop + y, TILE_WIDTH, TILE_HEIGHT, 0xc0, 0xff, NULL );
 #endif
+    drawTile( map.back, ( tile % 20 ) * TILE_WIDTH, ( tile / 20 ) * TILE_HEIGHT, w->RPort->BitMap, w->BorderLeft + x, w->BorderTop + y, TILE_WIDTH, TILE_HEIGHT, 0xc0, 0xff );
+
 }
 
 VOID drawMap( struct Window *w, WORD dx, WORD dy, BOOL force )
@@ -544,7 +546,7 @@ VOID drawPanel( struct Window *w )
 
     BltBitMap( map.back, 0, 0, w->RPort->BitMap, 0, 0, 320, 256, 0xc0, 0xff, NULL );
 
-    drawTile( map.gfx, 0, 0, map.back, 0, 0, 320, 48, 0xc0, 0xff );
+    BltBitMap( map.gfx, 0, 0, map.back, 0, 0, 320, 48, 0xc0, 0xff, NULL );
 }
 
 VOID updatePanel( struct Window *w )
@@ -557,7 +559,7 @@ VOID updatePanel( struct Window *w )
 
     if( collected != map.collected )
     {
-        Move( rp, VIEW_WIDTH * ( TILE_WIDTH + 1 ) + 2, ( TILE_HEIGHT ) + 4 + rp->Font->tf_Baseline );
+        Move( rp, VIEW_WIDTH * ( TILE_WIDTH + 1 ) + 2, ( TILE_HEIGHT )+4 + rp->Font->tf_Baseline );
         sprintf( text, "%3d", map.collected );
         Text( rp, text, 3 );
         collected = map.collected;
@@ -565,7 +567,7 @@ VOID updatePanel( struct Window *w )
 
     if( keys != map.keys )
     {
-        Move( rp, VIEW_WIDTH * ( TILE_WIDTH + 1 ) + 2, 2 * ( TILE_HEIGHT ) + 4 + rp->Font->tf_Baseline );
+        Move( rp, VIEW_WIDTH * ( TILE_WIDTH + 1 ) + 2, 2 * ( TILE_HEIGHT )+4 + rp->Font->tf_Baseline );
         sprintf( text, "%3d", map.keys );
         Text( rp, text, 3 );
         keys = map.keys;
@@ -573,7 +575,7 @@ VOID updatePanel( struct Window *w )
 
     if( ammo != map.ammo )
     {
-        Move( rp, VIEW_WIDTH * ( TILE_WIDTH + 1 ) + 2, 3 * ( TILE_HEIGHT ) + 4 + rp->Font->tf_Baseline );
+        Move( rp, VIEW_WIDTH * ( TILE_WIDTH + 1 ) + 2, 3 * ( TILE_HEIGHT )+4 + rp->Font->tf_Baseline );
         sprintf( text, "%3d", map.ammo );
         Text( rp, text, 3 );
         ammo = map.ammo;
@@ -626,8 +628,8 @@ VOID menuPick( struct Window *w, struct Menu *menu, UWORD code, BOOL *done, WORD
             }
         }
         else if( menuNum == 3 )
-        {                        
-            *type = ed[ itemNum ];           
+        {
+            *type = ed[ itemNum ];
         }
         else if( menuNum == 1 )
         {
@@ -636,7 +638,7 @@ VOID menuPick( struct Window *w, struct Menu *menu, UWORD code, BOOL *done, WORD
                 ShowTitle( w->WScreen, item->Flags & CHECKED );
             }
             else if( itemNum == 2 )
-            {                
+            {
                 if( *construct = item->Flags & CHECKED )
                 {
                     OnMenu( w, FULLMENUNUM( 2, NOITEM, NOITEM ) );
@@ -701,7 +703,6 @@ int main( void )
                                                 drawPanel( w );
                                                 drawMap( w, dx, dy, TRUE );
 
-                                                drawSelection( w );
                                                 WaitBlit();
                                                 ScreenToFront( s );
                                                 while( !done && !map.done )
@@ -752,9 +753,16 @@ int main( void )
                                                             UWORD code = msg->Code;
                                                             WORD mx = msg->MouseX;
                                                             WORD my = msg->MouseY;
-                                                            UWORD qual = msg->Qualifier;                                                            
+                                                            UWORD qual = msg->Qualifier;
 
-                                                            if( cls == IDCMP_MENUPICK )
+                                                            if( cls == IDCMP_MENUVERIFY )
+                                                            {
+                                                                if( my != 0 )
+                                                                {
+                                                                    msg->Code = MENUCANCEL;
+                                                                }
+                                                            }
+                                                            else if( cls == IDCMP_MENUPICK )
                                                             {
                                                                 menuPick( w, menu, code, &done, &curType, &curDir, &construct );
                                                             }
@@ -781,6 +789,48 @@ int main( void )
                                                                             updateCell( &map.map[ y + dy ][ x + dx ], curType, dir, 0 );
                                                                         }
                                                                     }
+                                                                }
+                                                                else if( code == MENUUP && construct )
+                                                                {
+                                                                    struct Window *rw;
+                                                                    struct Requester req;
+                                                                    InitRequester( &req );
+                                                                    Request( &req, w );
+                                                                    if( rw = OpenWindowTags( NULL,
+                                                                        WA_CustomScreen, s,
+                                                                        WA_Left, mx - 2 * TILE_WIDTH,
+                                                                        WA_Top, my - 2 * TILE_HEIGHT,
+                                                                        WA_Width, 1 + 5 * ( TILE_WIDTH + 1 ),
+                                                                        WA_Height, 1 + 5 * ( TILE_HEIGHT + 1 ),
+                                                                        WA_Borderless, TRUE,
+                                                                        WA_SimpleRefresh, TRUE,
+                                                                        WA_BackFill, LAYERS_NOBACKFILL,
+                                                                        WA_IDCMP, IDCMP_MOUSEBUTTONS,
+                                                                        WA_Activate, TRUE,
+                                                                        WA_RMBTrap, TRUE,
+                                                                        TAG_DONE ) )
+                                                                    {
+                                                                        struct IntuiMessage *im;
+                                                                        WORD i;
+                                                                        BltBitMapRastPort( map.back, 0, 102, rw->RPort, 0, 0, rw->Width, rw->Height, 0xc0 );
+                                                                        drawSelection( rw );
+
+                                                                        WaitPort( rw->UserPort );
+                                                                        if( im = ( struct IntuiMessage * )GetMsg( rw->UserPort ) )
+                                                                        {
+                                                                            if( im->Code == IECODE_LBUTTON )
+                                                                            {
+                                                                                WORD type = ( ( im->MouseY - 1 ) / ( TILE_HEIGHT + 1 ) ) * 5 + ( ( im->MouseX - 1 ) / ( TILE_WIDTH + 1 ) );
+                                                                                if( type >= 0 && type < E_COUNT )
+                                                                                {
+                                                                                    curType = ed[ type ];
+                                                                                }
+                                                                            }
+                                                                            ReplyMsg( ( struct Message * )im );
+                                                                        }
+                                                                        CloseWindow( rw );
+                                                                    }
+                                                                    EndRequest( &req, w );
                                                                 }
                                                             }
                                                             else if( cls == IDCMP_MOUSEMOVE )

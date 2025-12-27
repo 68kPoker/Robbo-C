@@ -148,12 +148,12 @@ VOID drawTile( struct BitMap *gfx, WORD sx, WORD sy, struct BitMap *dest, WORD d
     REGISTER struct Custom *c = &custom;
     BYTE shift, mshift;
     UWORD reverse;
-    UBYTE p;
+    UBYTE p, depth = dest->Depth;
     LONG gfxOffset, destOffset;
     WORD gfxMod, destMod;
     WORD gfxSpan, destSpan, span;
     UWORD firstMask, lastMask;
-    WORD x;
+    WORD x;    
 
     OwnBlitter();
 
@@ -190,8 +190,8 @@ VOID drawTile( struct BitMap *gfx, WORD sx, WORD sy, struct BitMap *dest, WORD d
 
     gfxOffset = sy * gfx->BytesPerRow + ( ( sx >> 4 ) << 1 );
     destOffset = dy * dest->BytesPerRow + ( ( dx >> 4 ) << 1 );
-    gfxMod = gfx->BytesPerRow - ( span << 1 );
-    destMod = dest->BytesPerRow - ( span << 1 );
+    gfxMod = gfx->BytesPerRow / depth - ( span << 1 );
+    destMod = dest->BytesPerRow / depth - ( span << 1 );
 
     if( reverse )
     {
@@ -203,14 +203,20 @@ VOID drawTile( struct BitMap *gfx, WORD sx, WORD sy, struct BitMap *dest, WORD d
         temp = firstMask;
         firstMask = lastMask;
         lastMask = temp;
+        p = depth - 1;
     }
-
+    else
+    {
+        p = 0;
+    }
+#if 0
     writeMask &= ( 1 << dest->Depth ) - 1;
 
     for( p = 0; writeMask; p++, writeMask >>= 1 )
     {
         if( writeMask & 1 )
         {
+#endif
             WaitBlit();
 
             c->bltcon0 = SRCB | SRCC | DEST | minterm | NABC | NANBC | ( mshift << ASHIFTSHIFT );
@@ -224,9 +230,11 @@ VOID drawTile( struct BitMap *gfx, WORD sx, WORD sy, struct BitMap *dest, WORD d
             c->bltdmod = destMod;
             c->bltafwm = firstMask;
             c->bltalwm = lastMask;
-            c->bltsize = ( height << HSIZEBITS ) | span;
+            c->bltsize = ( ( height * depth ) << HSIZEBITS ) | span;
+#if 0
         }
     }
+#endif
 
     DisownBlitter();
 }
@@ -281,7 +289,7 @@ VOID setBG( struct BitMap *gfx, WORD sx, WORD sy, struct BitMap *dest, WORD dx, 
     DisownBlitter();
 }
 
-VOID drawBob( struct BitMap *gfx, WORD sx, WORD sy, struct BitMap *dest, WORD dx, WORD dy, UWORD width, UWORD height, UBYTE minterm, UBYTE writeMask )
+VOID drawBob( struct BitMap *gfx, WORD sx, WORD sy, struct RastPort *rp, WORD dx, WORD dy, UWORD width, UWORD height, UBYTE minterm, UBYTE writeMask )
 {
     REGISTER struct Custom *c = &custom;
     UBYTE p;
@@ -290,15 +298,27 @@ VOID drawBob( struct BitMap *gfx, WORD sx, WORD sy, struct BitMap *dest, WORD dx
     WORD gfxMod, destMod;
     WORD span;
     UBYTE depth;
+    UBYTE shift;
+    struct BitMap *dest;
 
     OwnBlitter();
+
+    dest = rp->BitMap;
+
+    if( rp->Layer )
+    {
+        dx += rp->Layer->bounds.MinX;
+        dy += rp->Layer->bounds.MinY;
+    }
+
+    shift = dx & 0xF;
 
     depth = gfx->Depth - 1;
 
     gfxOffset = sy * gfx->BytesPerRow + ( ( sx >> 4 ) << 1 );
     destOffset = dy * dest->BytesPerRow + ( ( dx >> 4 ) << 1 );
 
-    span = width >> 4;
+    span = ( width >> 4 ) + 1;
 
     gfxMod = gfx->BytesPerRow - ( span << 1 );
     destMod = dest->BytesPerRow - ( span << 1 );
@@ -312,8 +332,8 @@ VOID drawBob( struct BitMap *gfx, WORD sx, WORD sy, struct BitMap *dest, WORD dx
         if( writeMask & 1 )
         {
             WaitBlit();
-            c->bltcon0 = SRCA | SRCB | SRCC | DEST | minterm;
-            c->bltcon1 = 0;
+            c->bltcon0 = SRCA | SRCB | SRCC | DEST | minterm | ( shift << ASHIFTSHIFT );
+            c->bltcon1 = shift << BSHIFTSHIFT;
             c->bltapt = mask;
             c->bltbpt = gfx->Planes[ p ] + gfxOffset;
             c->bltcpt = dest->Planes[ p ] + destOffset;
@@ -323,7 +343,7 @@ VOID drawBob( struct BitMap *gfx, WORD sx, WORD sy, struct BitMap *dest, WORD dx
             c->bltcmod = destMod;
             c->bltdmod = destMod;
             c->bltafwm = 0xFFFF;
-            c->bltalwm = 0xFFFF;
+            c->bltalwm = 0;
             c->bltsize = ( height << HSIZEBITS ) | span;
         }
     }
