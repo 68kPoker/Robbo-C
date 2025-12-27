@@ -3,6 +3,8 @@
 
 #include "Cell.h"
 
+#define SHOOT_PROB 0x08
+
 Map map;
 
 Type types[ T_COUNT ];
@@ -234,7 +236,7 @@ STATIC VOID scanCannon( Cell *cell )
 
     cell->delay = DELAY;
 
-    if( rnd < 0x10 )
+    if( rnd < SHOOT_PROB )
     {
         enterCell( cell + cell->dir, T_BULLET, cell->dir, 0 );
     }
@@ -263,7 +265,7 @@ STATIC VOID scanLaser( Cell *cell )
 
     cell->delay = DELAY;
 
-    if( rnd < 0x10 )
+    if( rnd < SHOOT_PROB )
     {
         enterCell( cell + cell->dir, T_BEAM_EXTEND, cell->dir, 0 );
     }
@@ -310,7 +312,7 @@ STATIC VOID scanBlaster( Cell *cell )
 
     if( cell->index == 0 )
     {
-        if( rnd < 0x10 )
+        if( rnd < SHOOT_PROB )
         {
             cell->index = 1;
         }

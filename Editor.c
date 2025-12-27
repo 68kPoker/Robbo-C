@@ -35,8 +35,13 @@ VOID drawSelection( struct Window *w )
 {
     WORD i;
 
+    drawTileRastPort( map.gfx, 64, 192, w->RPort, 0, 192, 256, 64, 0xc0 );
+    drawTileRastPort( map.gfx, 64, 128, w->RPort, 256, 192, 64, 64, 0xc0 );
+
+#if 0
     for( i = 0; i < E_COUNT; i++ )
     {
         drawBob( map.gfx, ( types[ ed[ i ] ].base % 20 ) * TILE_WIDTH, ( types[ ed[ i ] ].base / 20 ) * TILE_HEIGHT, w->RPort->BitMap, i * TILE_WIDTH, ( VIEW_HEIGHT + 1 ) * TILE_HEIGHT, TILE_WIDTH, TILE_HEIGHT, 0xca, 0xff );
     }
+#endif
 }

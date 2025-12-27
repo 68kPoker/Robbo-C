@@ -135,6 +135,7 @@ VOID drawMap( struct Window *w, WORD dx, WORD dy, BOOL force )
             }
         }
     }
+    SetWriteMask( w->RPort, 0xff );
 }
 
 VOID testMap( VOID )
@@ -463,6 +464,10 @@ VOID drawPanel( struct Window *w )
     WORD i, j;
     WORD tab[] = { T_SCREW, T_KEY, T_AMMO };
 
+#if 0
+    SetAPen( w->RPort, 26 );
+    RectFill( w->RPort, VIEW_WIDTH * TILE_WIDTH + 1, 0, w->Width - 1, ( 3 + 1 ) * ( TILE_HEIGHT + 2 ) );
+
     for( i = 0; i < 3; i++ )
     {
         drawBob( map.gfx, ( types[ tab[ i ] ].base % 20 ) * TILE_WIDTH, ( types[ tab[ i ] ].base / 20 ) * TILE_HEIGHT, w->RPort->BitMap, VIEW_WIDTH * TILE_WIDTH, ( i + 1 ) * ( TILE_HEIGHT + 2 ), TILE_WIDTH, TILE_HEIGHT, 0xca, 0xff );
@@ -471,6 +476,8 @@ VOID drawPanel( struct Window *w )
             pasteTile( 0, 4 * 20 + j, w, VIEW_WIDTH * TILE_WIDTH + TILE_WIDTH * ( j + 1 ), ( i + 1 ) * ( TILE_HEIGHT + 2 ) );
         }
     }
+#endif
+    drawTileRastPort( map.gfx, 0, 48, w->RPort, 256, 0, 64, 192, 0xc0 );
 }
 
 VOID updatePanel( struct Window *w )
@@ -479,11 +486,11 @@ VOID updatePanel( struct Window *w )
     UBYTE text[ 4 ];
     static WORD collected = -1, keys = -1, ammo = -1;
 
-    SetAPen( rp, 1 );
+    SetABPenDrMd( rp, 0, 26, JAM2 );
 
     if( collected != map.collected )
     {
-        Move( rp, VIEW_WIDTH * ( TILE_WIDTH + 1 ) + 2, ( TILE_HEIGHT + 2 ) + 4 + rp->Font->tf_Baseline );
+        Move( rp, VIEW_WIDTH * ( TILE_WIDTH + 1 ) + 2, ( TILE_HEIGHT ) + 4 + rp->Font->tf_Baseline );
         sprintf( text, "%3d", map.collected );
         Text( rp, text, 3 );
         collected = map.collected;
@@ -491,7 +498,7 @@ VOID updatePanel( struct Window *w )
 
     if( keys != map.keys )
     {
-        Move( rp, VIEW_WIDTH * ( TILE_WIDTH + 1 ) + 2, 2 * ( TILE_HEIGHT + 2 ) + 4 + rp->Font->tf_Baseline );
+        Move( rp, VIEW_WIDTH * ( TILE_WIDTH + 1 ) + 2, 2 * ( TILE_HEIGHT ) + 4 + rp->Font->tf_Baseline );
         sprintf( text, "%3d", map.keys );
         Text( rp, text, 3 );
         keys = map.keys;
@@ -499,7 +506,7 @@ VOID updatePanel( struct Window *w )
 
     if( ammo != map.ammo )
     {
-        Move( rp, VIEW_WIDTH * ( TILE_WIDTH + 1 ) + 2, 3 * ( TILE_HEIGHT + 2 ) + 4 + rp->Font->tf_Baseline );
+        Move( rp, VIEW_WIDTH * ( TILE_WIDTH + 1 ) + 2, 3 * ( TILE_HEIGHT ) + 4 + rp->Font->tf_Baseline );
         sprintf( text, "%3d", map.ammo );
         Text( rp, text, 3 );
         ammo = map.ammo;
