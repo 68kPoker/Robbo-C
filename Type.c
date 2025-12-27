@@ -493,10 +493,15 @@ VOID initMap( VOID )
             }
             else
             {
-                cell->type = T_SPACE;
+                cell->type = T_SPACE;                
             }
+            cell->frame = 0;
+            cell->index = 0;
+            cell->delay = 0;            
         }
     }
+    map.map[ 1 ][ 1 ].type = T_ROBBO;
+    map.map[ 1 ][ 1 ].dir = 0;
 }
 
 VOID updateCell( Cell *cell, WORD type, WORD dir, WORD frame )
