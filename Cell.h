@@ -86,7 +86,8 @@ typedef struct Map
     struct RastPort *rp;
     WORD block;
     BOOL done;
-    struct BitMap *back;
+    struct BitMap *back, *gfxBlit;
+    WORD dx, dy;
 } Map;
 
 typedef BOOL Enter( Cell *cell, WORD as, WORD dir, WORD frame );

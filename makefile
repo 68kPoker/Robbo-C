@@ -16,7 +16,7 @@ Robbo.exe: Window.o Type.o Editor.o Blitter.o
 
 Window.o: Window.h Cell.h Blitter.h Editor.h
 
-Editor.o: Editor.h
+Editor.o: Editor.h Window.h Cell.h
 
 Blitter.o: Blitter.h
 

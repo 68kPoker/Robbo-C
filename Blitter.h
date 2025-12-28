@@ -17,4 +17,4 @@ IMPORT VOID drawTile( struct BitMap *gfx, WORD sx, WORD sy, struct BitMap *dest,
 IMPORT VOID drawTileRastPort( struct BitMap *gfx, WORD sx, WORD sy, struct RastPort *rp, WORD dx, WORD dy, UWORD width, UWORD height, UBYTE minterm );
 
 IMPORT VOID setBG( struct BitMap *gfx, WORD sx, WORD sy, struct BitMap *dest, WORD dx, WORD dy, UWORD width, UWORD height, UBYTE minterm, UBYTE writeMask );
-IMPORT VOID drawBob( struct BitMap *gfx, WORD sx, WORD sy, struct RastPort *rp, WORD dx, WORD dy, UWORD width, UWORD height, UBYTE minterm, UBYTE writeMask );
+IMPORT VOID drawBob( struct BitMap *gfx, WORD sx, WORD sy, struct BitMap *dest, WORD dx, WORD dy, UWORD width, UWORD height, UBYTE minterm, UBYTE writeMask );

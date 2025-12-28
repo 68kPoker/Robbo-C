@@ -230,7 +230,8 @@ VOID drawTile( struct BitMap *gfx, WORD sx, WORD sy, struct BitMap *dest, WORD d
             c->bltdmod = destMod;
             c->bltafwm = firstMask;
             c->bltalwm = lastMask;
-            c->bltsize = ( ( height * depth ) << HSIZEBITS ) | span;
+            c->bltsizv = height * depth;
+            c->bltsizh = span;
 #if 0
         }
     }
@@ -289,7 +290,7 @@ VOID setBG( struct BitMap *gfx, WORD sx, WORD sy, struct BitMap *dest, WORD dx, 
     DisownBlitter();
 }
 
-VOID drawBob( struct BitMap *gfx, WORD sx, WORD sy, struct RastPort *rp, WORD dx, WORD dy, UWORD width, UWORD height, UBYTE minterm, UBYTE writeMask )
+VOID drawBob( struct BitMap *gfx, WORD sx, WORD sy, struct BitMap *dest, WORD dx, WORD dy, UWORD width, UWORD height, UBYTE minterm, UBYTE writeMask )
 {
     REGISTER struct Custom *c = &custom;
     UBYTE p;
@@ -299,17 +300,8 @@ VOID drawBob( struct BitMap *gfx, WORD sx, WORD sy, struct RastPort *rp, WORD dx
     WORD span;
     UBYTE depth;
     UBYTE shift;
-    struct BitMap *dest;
 
     OwnBlitter();
-
-    dest = rp->BitMap;
-
-    if( rp->Layer )
-    {
-        dx += rp->Layer->bounds.MinX;
-        dy += rp->Layer->bounds.MinY;
-    }
 
     shift = dx & 0xF;
 
