@@ -13,6 +13,7 @@ IMPORT UWORD planePick( struct BitMap *bm, WORD x, WORD y, UWORD width, UWORD he
 IMPORT BOOL planeOnOff( struct BitMap *bm, UBYTE p, WORD x, WORD y, UWORD width, UWORD height, BOOL ones );
 IMPORT BOOL planeMaskOnOff( struct BitMap *bm, UBYTE p, WORD x, WORD y, UWORD width, UWORD height, BOOL ones );
 
+IMPORT VOID drawTileStd( struct BitMap *gfx, WORD sx, WORD sy, struct BitMap *dest, WORD dx, WORD dy, UWORD width, UWORD height, UBYTE minterm, UBYTE writeMask );
 IMPORT VOID drawTile( struct BitMap *gfx, WORD sx, WORD sy, struct BitMap *dest, WORD dx, WORD dy, UWORD width, UWORD height, UBYTE minterm, UBYTE writeMask );
 IMPORT VOID drawTileRastPort( struct BitMap *gfx, WORD sx, WORD sy, struct RastPort *rp, WORD dx, WORD dy, UWORD width, UWORD height, UBYTE minterm );
 

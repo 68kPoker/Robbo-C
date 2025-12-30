@@ -141,7 +141,98 @@ VOID planePickArray( struct BitMap *bm, UWORD width, UWORD height, UWORD row, UW
     }
 }
 
-/* Draw single tile in BitMap */
+/* Draw single tile in BitMap (standard version) */
+
+VOID drawTileStd( struct BitMap *gfx, WORD sx, WORD sy, struct BitMap *dest, WORD dx, WORD dy, UWORD width, UWORD height, UBYTE minterm, UBYTE writeMask )
+{
+    REGISTER struct Custom *c = &custom;
+    BYTE shift, mshift;
+    UWORD reverse;
+    UBYTE p, depth = dest->Depth;
+    LONG gfxOffset, destOffset;
+    WORD gfxMod, destMod;
+    WORD gfxSpan, destSpan, span;
+    UWORD firstMask, lastMask;
+    WORD x;
+
+    OwnBlitter();
+
+    gfxSpan = ( ( sx + width - 1 ) >> 4 ) - ( sx >> 4 ) + 1;
+    destSpan = ( ( dx + width - 1 ) >> 4 ) - ( dx >> 4 ) + 1;
+
+    shift = ( dx & 0xF ) - ( sx & 0xF );
+
+    if( shift < 0 )
+    {
+        reverse = BLITREVERSE;
+        shift = -shift;
+    }
+    else
+    {
+        reverse = 0;
+    }
+
+    if( gfxSpan >= destSpan )
+    {
+        span = gfxSpan;
+        mshift = shift;
+        x = sx;
+    }
+    else
+    {
+        span = destSpan;
+        mshift = 0;
+        x = dx;
+    }
+
+    firstMask = 0xFFFF >> ( x & 0xF );
+    lastMask = 0xFFFF << ( 15 - ( ( x + width - 1 ) & 0xF ) );
+
+    gfxOffset = sy * gfx->BytesPerRow + ( ( sx >> 4 ) << 1 );
+    destOffset = dy * dest->BytesPerRow + ( ( dx >> 4 ) << 1 );
+    gfxMod = gfx->BytesPerRow - ( span << 1 );
+    destMod = dest->BytesPerRow - ( span << 1 );
+
+    if( reverse )
+    {
+        UWORD temp;
+
+        gfxOffset += ( height - 1 ) * gfx->BytesPerRow + ( ( span - 1 ) << 1 );
+        destOffset += ( height - 1 ) * dest->BytesPerRow + ( ( span - 1 ) << 1 );
+
+        temp = firstMask;
+        firstMask = lastMask;
+        lastMask = temp;
+    }
+
+    writeMask &= ( 1 << dest->Depth ) - 1;
+
+    for( p = 0; writeMask; p++, writeMask >>= 1 )
+    {
+        if( writeMask & 1 )
+        {
+            WaitBlit();
+
+            c->bltcon0 = SRCB | SRCC | DEST | minterm | NABC | NANBC | ( mshift << ASHIFTSHIFT );
+            c->bltcon1 = reverse | ( shift << BSHIFTSHIFT );
+            c->bltadat = 0xFFFF;
+            c->bltbpt = gfx->Planes[ p ] + gfxOffset;
+            c->bltcpt = dest->Planes[ p ] + destOffset;
+            c->bltdpt = dest->Planes[ p ] + destOffset;
+            c->bltbmod = gfxMod;
+            c->bltcmod = destMod;
+            c->bltdmod = destMod;
+            c->bltafwm = firstMask;
+            c->bltalwm = lastMask;
+            c->bltsizv = height;
+            c->bltsizh = span;
+        }
+    }
+
+    DisownBlitter();
+}
+
+/* Draw single tile in BitMap (interleaved version) */
 
 VOID drawTile( struct BitMap *gfx, WORD sx, WORD sy, struct BitMap *dest, WORD dx, WORD dy, UWORD width, UWORD height, UBYTE minterm, UBYTE writeMask )
 {

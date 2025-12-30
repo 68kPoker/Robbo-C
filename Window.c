@@ -34,6 +34,56 @@ WORD tiles[ VIEW_HEIGHT ][ VIEW_WIDTH ];
 
 UWORD myPlanePick[ 60 ];
 
+enum
+{
+    IMG_AMIGA,
+    IMG_CHECK,
+    IMG_CLEAR,
+    IMG_LOAD,
+    IMG_SAVE,
+    IMAGES
+};
+
+enum
+{
+    MENU_GAME,
+    MENU_SETTINGS,
+    MENU_CONSTRUCT
+};
+
+enum
+{
+    GAME_RESTART,
+    GAME_QUIT = GAME_RESTART + 2
+};
+
+enum
+{
+    SETTINGS_TITLE,
+    SETTINGS_CONSTRUCT = SETTINGS_TITLE + 2,
+};
+
+enum
+{
+    CONSTRUCT_CLEAR,
+    CONSTRUCT_LOAD,
+    CONSTRUCT_SAVE,
+    CONSTRUCT_TOOLS = CONSTRUCT_SAVE + 2,
+    CONSTRUCT_CURSOR,
+    CONSTRUCT_ROBBO = CONSTRUCT_CURSOR + 2,
+    CONSTRUCT_DIR
+};
+
+enum
+{
+    DIR_LEFT,
+    DIR_RIGHT,
+    DIR_UP,
+    DIR_DOWN
+};
+
+struct Image images[ IMAGES ];
+
 struct NewMenu nm[] =
 {
     { NM_TITLE, "Game", 0, 0, 0, 0 },
@@ -41,13 +91,13 @@ struct NewMenu nm[] =
     { NM_ITEM, NM_BARLABEL, 0, 0, 0, 0 },
     { NM_ITEM, "Quit...   ", "Q", 0, 0, 0 },
     { NM_TITLE, "Settings", 0, 0, 0, 0 },
-    { NM_ITEM, "Show Title    ", "T", MENUTOGGLE | CHECKIT | NM_ITEMDISABLED, 0, 0 },
+    { NM_ITEM, "Show Title    ", "T", MENUTOGGLE | CHECKIT, 0, 0 },
     { NM_ITEM, NM_BARLABEL, 0, 0, 0, 0 },
     { NM_ITEM, "Construct Mode", "M", MENUTOGGLE | CHECKIT, 0, 0 },
     { NM_TITLE, "Construct", 0, NM_MENUDISABLED, 0, 0 },
-    { NM_ITEM, "Clear...   ", 0, 0, 0, 0 },
-    { NM_ITEM, "Restore... ", "O", 0, 0, 0 },
-    { NM_ITEM, "Save       ", "S", 0, 0, 0 },
+    { IM_ITEM, images + IMG_CLEAR, 0, 0, 0, 0 },
+    { IM_ITEM, images + IMG_LOAD, "O", 0, 0, 0 },
+    { IM_ITEM, images + IMG_SAVE, "S", 0, 0, 0 },
     { NM_ITEM, NM_BARLABEL, 0, 0, 0, 0 },
     { NM_ITEM, "Show Tools ", "B", MENUTOGGLE | CHECKIT | NM_ITEMDISABLED, 0, 0 },
     { NM_ITEM, "Show Cursor", "C", MENUTOGGLE | CHECKIT, 0, 0 },
@@ -84,6 +134,65 @@ struct NewMenu nm[] =
 
 WORD pens[ NUMDRIPENS + 1 ] = { 0, 12, 0, 2, 0, 11, 2, 12, 2, 0, 12, 0, ~0 };
 
+struct Gadget dragBar;
+
+struct Window *openToolbox( struct Window *w, WORD mx, WORD my, ULONG *mask );
+
+BOOL createImage( struct Image *img, struct BitMap *bm, WORD x, WORD y, WORD width, WORD height )
+{
+    UWORD pick;
+    UBYTE planes, p;
+    UWORD wordWidth;
+    UWORD planeSize, *ptr;
+    struct BitMap dest;
+
+    pick = planePick( bm, x, y, width, height, FALSE );
+
+    img->Width = width;
+    img->Height = height;
+    img->NextImage = NULL;
+    img->PlanePick = pick & 0xff;
+    img->PlaneOnOff = pick >> 8;
+    img->Depth = bm->Depth;
+
+    pick &= 0xff;
+
+    for( planes = 0; pick; pick >>= 1 )
+    {
+        if( pick & 1 )
+        {
+            planes++;
+        }
+    }
+
+    pick = img->PlanePick;
+
+    wordWidth = ( width + 15 ) >> 4;
+    planeSize = wordWidth * height;
+
+    if( img->ImageData = ptr = AllocVec( planeSize * sizeof( WORD ) * planes, MEMF_CHIP ) )
+    {
+        InitBitMap( &dest, bm->Depth, width, height );
+
+        for( p = 0; pick; p++, pick >>= 1 )
+        {
+            if( pick & 1 )
+            {
+                dest.Planes[ p ] = ( PLANEPTR )ptr;
+                ptr += planeSize;
+            }
+        }
+        drawTileStd( bm, x, y, &dest, 0, 0, width, height, 0xc0, img->PlanePick );
+        return( TRUE );
+    }
+    return( FALSE );
+}
+
+void deleteImage( struct Image *img )
+{
+    FreeVec( img->ImageData );
+}
+
 struct Window *openWindow( struct Screen *s, struct Region **reg )
 {
     struct Window *w;
@@ -94,16 +203,18 @@ struct Window *openWindow( struct Screen *s, struct Region **reg )
         WA_Top, 0,
         WA_Width, s->Width,
         WA_Height, s->Height,
-        WA_ScreenTitle, "RobboC (c)2025 Robert Szacki",
-        WA_IDCMP, IDCMP_MOUSEMOVE | IDCMP_MOUSEBUTTONS | IDCMP_RAWKEY | IDCMP_REFRESHWINDOW,
+        WA_ScreenTitle, "RobboC: Game mode",
+        WA_IDCMP, IDCMP_MOUSEMOVE | IDCMP_MOUSEBUTTONS | IDCMP_RAWKEY | IDCMP_REFRESHWINDOW | IDCMP_MENUPICK,
         WA_ReportMouse, TRUE,
         WA_Activate, TRUE,
         WA_SimpleRefresh, TRUE,
         WA_BackFill, LAYERS_NOBACKFILL,
         WA_Borderless, TRUE,
         WA_Backdrop, TRUE,
-        WA_RMBTrap, TRUE,
+        WA_RMBTrap, FALSE,
         WA_NewLookMenus, TRUE,
+        WA_Checkmark, images + IMG_CHECK,
+        WA_AmigaKey, images + IMG_AMIGA,
         TAG_DONE ) )
     {
         if( *reg = NewRegion() )
@@ -444,7 +555,7 @@ struct Screen *openScreen( struct IFFHandle *iff, struct BitMapHeader *bmhd )
                         SA_Depth, bmhd->bmh_Depth,
                         SA_Interleaved, TRUE,
                         SA_ColorMapEntries, count,
-                        SA_Quiet, TRUE,
+                        SA_Quiet, FALSE,
                         SA_BackFill, LAYERS_NOBACKFILL,
                         SA_Title, "RobboC (c)2025 Robert Szacki",
                         SA_ShowTitle, FALSE,
@@ -596,7 +707,7 @@ VOID prepBG( VOID )
     planePickArray( map.gfx, TILE_WIDTH, TILE_HEIGHT, 20, 3, myPlanePick, FALSE );
 }
 
-VOID menuPick( struct Window *w, struct Menu *menu, UWORD code, BOOL *done, WORD *type, WORD *dir, BOOL *construct, struct Window **toolbox, ULONG *mask )
+VOID menuPick( struct Window *w, struct Menu *menu, UWORD code, BOOL *done, WORD *type, WORD *dir, BOOL *construct, struct Window **toolbox, ULONG *mask, WORD *toolx, WORD *tooly )
 {
     struct MenuItem *item;
     UWORD menuNum, itemNum, subNum;
@@ -610,52 +721,56 @@ VOID menuPick( struct Window *w, struct Menu *menu, UWORD code, BOOL *done, WORD
         itemNum = ITEMNUM( code );
         subNum = SUBNUM( code );
 
-        if( menuNum == 0 )
+        if( menuNum == MENU_GAME )
         {
-            if( itemNum == 2 )
+            if( itemNum == GAME_QUIT )
             {
                 *done = TRUE;
                 return;
             }
         }
-        else if( menuNum == 2 )
+        else if( menuNum == MENU_CONSTRUCT )
         {
-            if( itemNum == 0 )
+            if( itemNum == CONSTRUCT_CLEAR )
             {
                 initMap();
             }
-            else if( itemNum == 8 )
+            else if( itemNum == CONSTRUCT_DIR )
             {
                 *dir = dirs[ subNum ];
             }
         }
-        else if( menuNum == 3 )
+        else if( menuNum == MENU_SETTINGS )
         {
-            *type = ed[ itemNum ];
-        }
-        else if( menuNum == 1 )
-        {
-            if( itemNum == 0 )
+            if( itemNum == SETTINGS_TITLE )
             {
                 ShowTitle( w->WScreen, item->Flags & CHECKED );
             }
-            else if( itemNum == 2 )
+            else if( itemNum == SETTINGS_CONSTRUCT )
             {
                 if( *construct = item->Flags & CHECKED )
                 {
-                    OnMenu( w, FULLMENUNUM( 2, NOITEM, NOITEM ) );
-                    OnMenu( w, FULLMENUNUM( 3, NOITEM, NOITEM ) );
+                    if( !*toolbox )
+                    {
+                        *toolbox = openToolbox( w, *toolx, *tooly, mask );
+                        SetWindowTitles( *toolbox, ( UBYTE * )~0, "RobboC: Constructor" );
+                        SetWindowTitles( w, ( UBYTE * )~0, "RobboC: Constructor" );
+                    }
+
+                    OnMenu( w, FULLMENUNUM( MENU_CONSTRUCT, NOITEM, NOITEM ) );
                 }
                 else
                 {
                     if( *toolbox )
                     {
+                        *toolx = ( *toolbox )->LeftEdge;
+                        *tooly = ( *toolbox )->TopEdge;
                         CloseWindow( *toolbox );
                         mask[ 1 ] = 0L;
                         *toolbox = NULL;
                     }
-                    OffMenu( w, FULLMENUNUM( 2, NOITEM, NOITEM ) );
-                    OffMenu( w, FULLMENUNUM( 3, NOITEM, NOITEM ) );
+                    SetWindowTitles( w, ( UBYTE * )~0, "RobboC: Game mode" );
+                    OffMenu( w, FULLMENUNUM( MENU_CONSTRUCT, NOITEM, NOITEM ) );                    
                 }
             }
         }
@@ -676,10 +791,15 @@ CPTR hookFunc( LONG type, CPTR obj, struct FileRequester *fr )
         w = msg->IDCMPWindow;
         if( msg->Class == IDCMP_REFRESHWINDOW )
         {
+            WORD i, j;
             BeginRefresh( w );
+#if 0
             drawPanel( w );
             drawMap( w, map.dx, map.dy, TRUE );
             updatePanel( w );
+#endif
+            drawTileRastPort( map.rp->BitMap, 0, 0, w->RPort, 0, 0, 320, 256, 0xc0 );
+
             EndRefresh( w, TRUE );
         }
 
@@ -689,6 +809,42 @@ CPTR hookFunc( LONG type, CPTR obj, struct FileRequester *fr )
     return( 0 );
 }
 
+struct Window *openToolbox( struct Window *w, WORD mx, WORD my, ULONG *mask )
+{
+    struct Window *toolbox;
+
+    if( toolbox = OpenWindowTags( NULL,
+        WA_CustomScreen, w->WScreen,
+        WA_Left, mx,
+        WA_Top, my,
+        WA_Width, 1 + 5 * ( TILE_WIDTH + 1 ),
+        WA_Height, 1 + 5 * ( TILE_HEIGHT + 1 ) + 8,
+        WA_Borderless, TRUE,
+        WA_SimpleRefresh, TRUE,
+        WA_BackFill, LAYERS_NOBACKFILL,
+        WA_IDCMP, IDCMP_MOUSEBUTTONS | IDCMP_REFRESHWINDOW,
+        WA_Activate, TRUE,
+        WA_RMBTrap, FALSE,
+        WA_ScreenTitle, "RobboC: Toolbox active",
+        WA_Gadgets, &dragBar,
+        TAG_DONE ) )
+    {
+        mask[ 1 ] = 1L << toolbox->UserPort->mp_SigBit;
+
+        drawTileRastPort( map.back, 0, 102 - 8, toolbox->RPort, 0, 0, toolbox->Width, toolbox->Height, 0xc0 );
+        LendMenus( toolbox, w );
+        return( toolbox );
+    }
+    return( NULL );
+}
+
+void closeToolbox( struct Window *toolbox, ULONG *mask )
+{
+    CloseWindow( toolbox );
+    mask[ 1 ] = 0L;
+
+}
+
 int main( void )
 {
     struct Screen *s;
@@ -696,6 +852,13 @@ int main( void )
     struct Region *reg;
     struct VisualInfo *vi;
     struct Menu *menu;
+
+
+    dragBar.Activation = GACT_IMMEDIATE;
+    dragBar.Flags = GFLG_GADGHNONE;
+    dragBar.Width = 5 * TILE_WIDTH;
+    dragBar.Height = 8;
+    dragBar.GadgetType = GTYP_WDRAGGING;    
 
     if( IntuitionBase = OpenLibrary( "intuition.library", VERS ) )
     {
@@ -711,14 +874,20 @@ int main( void )
                         {
                             if( map.back = readPicture( "Back.iff", &s ) )
                             {
+                                map.rp = &s->RastPort;
                                 if( vi = GetVisualInfo( s, TAG_DONE ) )
                                 {
                                     if( map.gfx = readPicture( "Gfx.iff", NULL ) )
                                     {
                                         prepBG();
-                                        if( map.gfxBlit = AllocBitMap( 320, 48, map.back->Depth, BMF_INTERLEAVED, NULL ) )
+                                        if( map.gfxBlit = AllocBitMap( 320, 128, map.back->Depth, BMF_INTERLEAVED, NULL ) )
                                         {
-                                            BltBitMap( map.gfx, 0, 0, map.gfxBlit, 0, 0, 320, 48, 0xc0, 0xff, NULL );
+                                            BltBitMap( map.gfx, 0, 0, map.gfxBlit, 0, 0, 320, 128, 0xc0, 0xff, NULL );
+                                            createImage( images + IMG_CLEAR, map.gfxBlit, 0, 48, TILE_WIDTH, TILE_HEIGHT );
+                                            createImage( images + IMG_LOAD, map.gfxBlit, 16, 48, TILE_WIDTH, TILE_HEIGHT );
+                                            createImage( images + IMG_SAVE, map.gfxBlit, 32, 48, TILE_WIDTH, TILE_HEIGHT );
+                                            createImage( images + IMG_AMIGA, map.gfxBlit, 48, 48, TILE_WIDTH, 10 );
+                                            createImage( images + IMG_CHECK, map.gfxBlit, 64, 48, TILE_WIDTH, 10 );
                                             if( w = openWindow( s, &reg ) )
                                             {
                                                 if( menu = CreateMenus( nm, TAG_DONE ) )
@@ -728,10 +897,12 @@ int main( void )
                                                         BOOL done = FALSE, construct = FALSE;
                                                         WORD dx = 0, dy = 0, tx = 0, ty = 0;
                                                         WORD i;
-                                                        BOOL view = FALSE;
+                                                        BOOL view = FALSE, paint = FALSE;
+                                                        WORD px, py;
                                                         BYTE dir = 0;
                                                         WORD curType = T_SCREW, curDir = LEFT;
                                                         ULONG mask[ 2 ] = { 0 };
+                                                        WORD toolx = 0, tooly = s->BarHeight + 1;
 
                                                         mask[ 0 ] = 1L << w->UserPort->mp_SigBit;
 
@@ -743,7 +914,7 @@ int main( void )
 
                                                         drawPanel( w );
                                                         drawMap( w, dx, dy, TRUE );
-                                                        drawSelection( w );
+                                                        drawSelection( w );                                                        
 
                                                         WaitBlit();
                                                         ScreenToFront( s );
@@ -797,20 +968,27 @@ int main( void )
                                                                     WORD my = msg->MouseY;
                                                                     ReplyMsg( ( struct Message * )msg );
 
-                                                                    if( code == ( IECODE_LBUTTON | IECODE_UP_PREFIX ) )
+                                                                    if( cls == IDCMP_REFRESHWINDOW )
                                                                     {
-                                                                        WORD type = ( ( my - 1 ) / ( TILE_HEIGHT + 1 ) ) * 5 + ( ( mx - 1 ) / ( TILE_WIDTH + 1 ) );
-                                                                        if( type >= 0 && type < E_COUNT )
-                                                                        {
-                                                                            curType = ed[ type ];
-                                                                        }
+                                                                        drawTileRastPort( map.back, 0, 102 - 8, toolbox->RPort, 0, 0, toolbox->Width, toolbox->Height, 0xc0 );
                                                                     }
-                                                                    else if( code == IECODE_RBUTTON )
+                                                                    else if( cls == IDCMP_MOUSEBUTTONS )
                                                                     {
-                                                                        CloseWindow( toolbox );
-                                                                        mask[ 1 ] = 0L;
-                                                                        toolbox = NULL;
-                                                                        break;
+                                                                        if( code == ( IECODE_LBUTTON | IECODE_UP_PREFIX ) )
+                                                                        {
+                                                                            WORD type = ( ( my - 1 - 8 ) / ( TILE_HEIGHT + 1 ) ) * 5 + ( ( mx - 1 ) / ( TILE_WIDTH + 1 ) );
+                                                                            if( type >= 0 && type < E_COUNT )
+                                                                            {
+                                                                                curType = ed[ type ];
+                                                                            }
+                                                                        }
+                                                                        else if( code == IECODE_RBUTTON )
+                                                                        {
+                                                                            CloseWindow( toolbox );
+                                                                            mask[ 1 ] = 0L;
+                                                                            toolbox = NULL;
+                                                                            break;
+                                                                        }
                                                                     }
                                                                 }
                                                             }
@@ -833,12 +1011,10 @@ int main( void )
                                                                         updatePanel( w );
                                                                         EndRefresh( w, TRUE );
                                                                     }
-#if 0
                                                                     else if( cls == IDCMP_MENUPICK )
                                                                     {
-                                                                        menuPick( w, menu, code, &done, &curType, &curDir, &construct, &toolbox, mask );
+                                                                        menuPick( w, menu, code, &done, &curType, &curDir, &construct, &toolbox, mask, &toolx, &tooly );
                                                                     }
-#endif
                                                                     else if( cls == IDCMP_MOUSEBUTTONS )
                                                                     {
                                                                         WORD x = mx / TILE_WIDTH, y = my / TILE_HEIGHT;
@@ -851,6 +1027,8 @@ int main( void )
                                                                                 {
                                                                                     WORD dir;
 
+                                                                                    paint = TRUE;
+
                                                                                     if( curType == T_CANNON || curType == T_LASER || curType == T_BLASTER || curType == T_BAT )
                                                                                     {
                                                                                         dir = curDir;
@@ -860,13 +1038,21 @@ int main( void )
                                                                                         dir = 0;
                                                                                     }
                                                                                     updateCell( &map.map[ y + dy ][ x + dx ], curType, dir, 0 );
+                                                                                    px = x;
+                                                                                    py = y;
                                                                                 }
                                                                             }
                                                                         }
-                                                                        else if( msg->Code == IECODE_RBUTTON )
+                                                                        else if( code == ( IECODE_LBUTTON | IECODE_UP_PREFIX ) )
+                                                                        {
+                                                                            paint = FALSE;
+                                                                        }
+                                                                        else if( code == IECODE_RBUTTON )
                                                                         {
                                                                             if( toolbox )
                                                                             {
+                                                                                toolx = toolbox->LeftEdge;
+                                                                                tooly = toolbox->TopEdge;
                                                                                 CloseWindow( toolbox );
                                                                                 mask[ 1 ] = 0L;
                                                                                 toolbox = NULL;
@@ -877,30 +1063,43 @@ int main( void )
                                                                             if( toolbox )
                                                                             {
                                                                                 MoveWindow( toolbox, mx - toolbox->LeftEdge, my - toolbox->TopEdge );
+                                                                                toolx = toolbox->LeftEdge;
+                                                                                tooly = toolbox->TopEdge;
                                                                             }
-                                                                            else if( toolbox = OpenWindowTags( NULL,
-                                                                                WA_CustomScreen, s,
-                                                                                WA_Left, mx - 2 * TILE_WIDTH,
-                                                                                WA_Top, my - 2 * TILE_HEIGHT,
-                                                                                WA_Width, 1 + 5 * ( TILE_WIDTH + 1 ),
-                                                                                WA_Height, 1 + 5 * ( TILE_HEIGHT + 1 ),
-                                                                                WA_Borderless, TRUE,
-                                                                                WA_SimpleRefresh, TRUE,
-                                                                                WA_BackFill, LAYERS_NOBACKFILL,
-                                                                                WA_IDCMP, IDCMP_MOUSEBUTTONS | IDCMP_REFRESHWINDOW,
-                                                                                WA_Activate, TRUE,
-                                                                                WA_RMBTrap, TRUE,
-                                                                                TAG_DONE ) )
+                                                                            else
                                                                             {
-                                                                                mask[ 1 ] = 1L << toolbox->UserPort->mp_SigBit;
-
-                                                                                drawTileRastPort( map.back, 0, 102, toolbox->RPort, 0, 0, toolbox->Width, toolbox->Height, 0xc0 );
+                                                                                toolbox = openToolbox( w, mx, my, mask );
+                                                                                toolx = toolbox->LeftEdge;
+                                                                                tooly = toolbox->TopEdge;
                                                                             }
                                                                         }
                                                                     }
                                                                     else if( cls == IDCMP_MOUSEMOVE )
                                                                     {
+                                                                        WORD x = mx / TILE_WIDTH, y = my / TILE_HEIGHT;
 
+                                                                        if( construct && paint )
+                                                                        {
+                                                                            if( x >= 0 && x < VIEW_WIDTH && y >= 0 && y < VIEW_HEIGHT )
+                                                                            {
+                                                                                if( x != px || y != py )
+                                                                                {
+                                                                                    WORD dir;                                                                                 
+
+                                                                                    if( curType == T_CANNON || curType == T_LASER || curType == T_BLASTER || curType == T_BAT )
+                                                                                    {
+                                                                                        dir = curDir;
+                                                                                    }
+                                                                                    else
+                                                                                    {
+                                                                                        dir = 0;
+                                                                                    }
+                                                                                    updateCell( &map.map[ y + dy ][ x + dx ], curType, dir, 0 );
+                                                                                    px = x;
+                                                                                    py = y;
+                                                                                }
+                                                                            }
+                                                                        }
                                                                     }
                                                                     else if( cls == IDCMP_RAWKEY )
                                                                     {
@@ -910,36 +1109,7 @@ int main( void )
                                                                         }
                                                                         else if( code == F1_KEY )
                                                                         {
-                                                                            if( !( construct = !construct ) )
-                                                                            {
-                                                                                if( toolbox )
-                                                                                {
-                                                                                    CloseWindow( toolbox );
-                                                                                    mask[ 1 ] = 0L;
-                                                                                    toolbox = NULL;
-                                                                                }
-                                                                            }
-                                                                            else if( !toolbox )
-                                                                            {
-                                                                                if( toolbox = OpenWindowTags( NULL,
-                                                                                    WA_CustomScreen, s,
-                                                                                    WA_Left, mx - 2 * TILE_WIDTH,
-                                                                                    WA_Top, my - 2 * TILE_HEIGHT,
-                                                                                    WA_Width, 1 + 5 * ( TILE_WIDTH + 1 ),
-                                                                                    WA_Height, 1 + 5 * ( TILE_HEIGHT + 1 ),
-                                                                                    WA_Borderless, TRUE,
-                                                                                    WA_SimpleRefresh, TRUE,
-                                                                                    WA_BackFill, LAYERS_NOBACKFILL,
-                                                                                    WA_IDCMP, IDCMP_MOUSEBUTTONS,
-                                                                                    WA_Activate, TRUE,
-                                                                                    WA_RMBTrap, TRUE,
-                                                                                    TAG_DONE ) )
-                                                                                {
-                                                                                    mask[ 1 ] = 1L << toolbox->UserPort->mp_SigBit;
 
-                                                                                    drawTileRastPort( map.back, 0, 102, toolbox->RPort, 0, 0, toolbox->Width, toolbox->Height, 0xc0 );
-                                                                                }
-                                                                            }
                                                                         }
                                                                         else if( code == F1_KEY + 1 )
                                                                         {
@@ -953,121 +1123,98 @@ int main( void )
                                                                                     { 0, 0, 0, 0 },
                                                                                     { -1 }
                                                                                 };
+                                                                                struct BitMap *auxbm;
                                                                                 struct Window *auxw;
-                                                                                struct TagItem vc[] = { VC_NoColorPaletteLoad, TRUE, TAG_DONE };
+                                                                                UBYTE depth = s->ViewPort.RasInfo->BitMap->Depth;
+                                                                                WORD i, j;
 
-                                                                                if( auxs = OpenScreenTags( NULL,
-                                                                                    SA_DisplayID, HIRES_KEY,
-                                                                                    SA_Width, 640,
-                                                                                    SA_Height, 256,
-                                                                                    SA_Parent, s,
-                                                                                    SA_Depth, s->ViewPort.RasInfo->BitMap->Depth,
-                                                                                    SA_Interleaved, TRUE,
-                                                                                    SA_Exclusive, TRUE,
-                                                                                    SA_Draggable, FALSE,
-                                                                                    SA_Quiet, TRUE,
-                                                                                    SA_ShowTitle, FALSE,
-                                                                                    SA_BackFill, LAYERS_NOBACKFILL,
-                                                                                    SA_Title, "Robbo Disk Operations",
-                                                                                    SA_Pens, pens,
-                                                                                    SA_Behind, TRUE,
-                                                                                    SA_BlockPen, 0,
-                                                                                    SA_DetailPen, 12,
-                                                                                    SA_SysFont, 1,
-                                                                                    TAG_DONE ) )
+                                                                                if( auxbm = AllocBitMap( 320, 256, depth, BMF_DISPLAYABLE | BMF_INTERLEAVED, NULL ) )
                                                                                 {
-                                                                                    if( auxw = OpenWindowTags( NULL,
-                                                                                        WA_CustomScreen, auxs,
-                                                                                        WA_Left, 0,
-                                                                                        WA_Top, 0,
-                                                                                        WA_Width, auxs->Width,
-                                                                                        WA_Height, auxs->Height,
-                                                                                        WA_Backdrop, TRUE,
-                                                                                        WA_SmartRefresh, TRUE,
-                                                                                        WA_RMBTrap, TRUE,
-                                                                                        WA_Borderless, TRUE,
+                                                                                    if( auxs = OpenScreenTags( NULL,
+                                                                                        SA_LikeWorkbench, TRUE,
+                                                                                        SA_DisplayID, GetVPModeID( &s->ViewPort ),
+                                                                                        SA_Width, 320,
+                                                                                        SA_Height, 256,
+                                                                                        SA_BitMap, auxbm,
+                                                                                        SA_Parent, s,
+                                                                                        SA_Exclusive, TRUE,
+                                                                                        SA_Draggable, FALSE,
+                                                                                        SA_BackFill, LAYERS_NOBACKFILL,
+                                                                                        SA_Title, "Robbo Disk Operations",
+                                                                                        SA_Pens, pens,
+                                                                                        SA_Behind, TRUE,
+                                                                                        SA_BlockPen, 0,
+                                                                                        SA_DetailPen, 12,
+                                                                                        SA_SysFont, 1,
                                                                                         TAG_DONE ) )
                                                                                     {
-                                                                                        struct BitScaleArgs bsa = { 0 };
-                                                                                        static ULONG col[ 3 * 32 + 2 ] = { 32 << 16 }, ncol[ 3 * 32 + 2 ] = { 32 << 16 }, *src, *dest;
-                                                                                        WORD i, j;
-                                                                                                                                                                                
-                                                                                        GetRGB32( s->ViewPort.ColorMap, 0, 32, col + 1 );
-
-                                                                                        for( j = 0; j < 16; j++ )
-                                                                                        {
-                                                                                            bsa.bsa_SrcBitMap = s->RastPort.BitMap;
-                                                                                            bsa.bsa_DestBitMap = auxs->RastPort.BitMap;
-                                                                                            bsa.bsa_SrcY = j << 4;
-                                                                                            bsa.bsa_DestY = j << 4;
-                                                                                            bsa.bsa_SrcWidth = 320;
-                                                                                            bsa.bsa_SrcHeight = 16;
-                                                                                            bsa.bsa_XSrcFactor = 1;
-                                                                                            bsa.bsa_YSrcFactor = 1;
-                                                                                            bsa.bsa_XDestFactor = 2;
-                                                                                            bsa.bsa_YDestFactor = 1;
-                                                                                            bsa.bsa_DestWidth = 640;
-                                                                                            bsa.bsa_DestHeight = 16;
-
-                                                                                            BitMapScale( &bsa );
-
-                                                                                            src = col + 1;
-                                                                                            dest = ncol + 1;
-
-                                                                                            for( i = 0; i < s->ViewPort.ColorMap->Count; i++ )
-                                                                                            {
-                                                                                                UBYTE red = *src++ >> 24;
-                                                                                                UBYTE green = *src++ >> 24;
-                                                                                                UBYTE blue = *src++ >> 24;
-
-                                                                                                if( i == 11 )
-                                                                                                {
-                                                                                                    *dest++ = red * 0x01010101;
-                                                                                                    *dest++ = green * 0x01010101;
-                                                                                                    *dest++ = blue * 0x01010101;
-                                                                                                }
-                                                                                                else
-                                                                                                {
-                                                                                                    *dest++ = ( ( ( 48 - ( j * 2 ) ) * red + j * green + j * blue ) / 48 ) * 0x01010101;
-                                                                                                    *dest++ = ( ( j * red + ( 48 - ( j * 2 ) ) * green + j * blue ) / 48 ) * 0x01010101;
-                                                                                                    *dest++ = ( ( j * red + j * green + ( 48 - ( j * 2 ) ) * blue ) / 48 ) * 0x01010101;
-                                                                                                }
-                                                                                            }
-                                                                                            LoadRGB32( &s->ViewPort, ncol );
-                                                                                            WaitTOF();
-                                                                                        }
-                                                                                        LoadRGB32( &auxs->ViewPort, ncol );
-
-                                                                                        ScreenDepth( auxs, SDEPTH_TOFRONT | SDEPTH_INFAMILY, NULL );
-                                                                                        LoadRGB32( &s->ViewPort, col );
-
-                                                                                        map.dx = dx;
-                                                                                        map.dy = dy;
-                                                                                        if( fr = AllocAslRequestTags( ASL_FileRequest,
-                                                                                            ASLFR_InitialLeftEdge, auxs->Width / 4,
-                                                                                            ASLFR_InitialTopEdge, auxs->Height / 8,
-                                                                                            ASLFR_InitialWidth, auxs->Width / 2,
-                                                                                            ASLFR_InitialHeight, ( 3 * auxs->Height ) / 4,
-                                                                                            ASLFR_TitleText, "Select Map file to load",
-                                                                                            ASLFR_PositiveText, "Load",
-                                                                                            ASLFR_DoSaveMode, FALSE,
-                                                                                            ASLFR_InitialPattern, "#?.robbo",
-                                                                                            ASLFR_Window, auxw,
-                                                                                            ASLFR_DoPatterns, TRUE,
-#if 0
-                                                                                            ASLFR_Window, w,
-                                                                                            ASLFR_SleepWindow, TRUE,
-                                                                                            ASL_HookFunc, ( ULONG )hookFunc,
-                                                                                            ASL_FuncFlags, FILF_DOMSGFUNC,
-#endif
+                                                                                        if( auxw = OpenWindowTags( NULL,
+                                                                                            WA_CustomScreen, auxs,
+                                                                                            WA_Left, 0,
+                                                                                            WA_Top, 0,
+                                                                                            WA_Width, auxs->Width,
+                                                                                            WA_Height, auxs->Height,
+                                                                                            WA_Backdrop, TRUE,
+                                                                                            WA_SimpleRefresh, TRUE,
+                                                                                            WA_BackFill, LAYERS_NOBACKFILL,
+                                                                                            WA_RMBTrap, TRUE,
+                                                                                            WA_Borderless, TRUE,
+                                                                                            WA_IDCMP, IDCMP_REFRESHWINDOW,
                                                                                             TAG_DONE ) )
                                                                                         {
-                                                                                            AslRequestTags( fr, TAG_DONE );
-                                                                                            FreeAslRequest( fr );
+
+                                                                                            for( i = 0; i < auxs->ViewPort.ColorMap->Count; i++ )
+                                                                                            {
+                                                                                                ULONG color[ 3 ], red, green, blue;
+
+                                                                                                GetRGB32( s->ViewPort.ColorMap, i, 1, color );
+
+                                                                                                red = color[ 0 ] >> 24;
+                                                                                                green = color[ 1 ] >> 24;
+                                                                                                blue = color[ 2 ] >> 24;
+
+                                                                                                SetRGB32CM( auxs->ViewPort.ColorMap, i, RGB( red ), RGB( green ), RGB( blue ) );
+
+                                                                                            }
+
+
+
+
+
+                                                                                            drawTileRastPort( s->RastPort.BitMap, 0, 0, auxw->RPort, 0, 0, 320, 256, 0xc0 );
+
+
+
+                                                                                            WaitBlit();
+                                                                                            ScreenDepth( auxs, SDEPTH_TOFRONT | SDEPTH_INFAMILY, NULL );
+
+
+                                                                                            map.dx = dx;
+                                                                                            map.dy = dy;
+                                                                                            if( fr = AllocAslRequestTags( ASL_FileRequest,
+                                                                                                ASLFR_InitialLeftEdge, auxs->Width / 8,
+                                                                                                ASLFR_InitialTopEdge, auxs->Height / 8,
+                                                                                                ASLFR_InitialWidth, ( 3 * auxs->Width ) / 4,
+                                                                                                ASLFR_InitialHeight, ( 3 * auxs->Height ) / 4,
+                                                                                                ASLFR_TitleText, "Select Map file to load",
+                                                                                                ASLFR_PositiveText, "Load",
+                                                                                                ASLFR_DoSaveMode, FALSE,
+                                                                                                ASLFR_InitialPattern, "#?.robbo",
+                                                                                                ASLFR_Window, auxw,
+                                                                                                ASLFR_DoPatterns, TRUE,
+                                                                                                ASLFR_SleepWindow, TRUE,
+                                                                                                ASL_HookFunc, ( ULONG )hookFunc,
+                                                                                                ASL_FuncFlags, FILF_DOMSGFUNC,
+                                                                                                TAG_DONE ) )
+                                                                                            {
+                                                                                                AslRequestTags( fr, TAG_DONE );
+                                                                                                FreeAslRequest( fr );
+                                                                                            }
+                                                                                            CloseWindow( auxw );
                                                                                         }
-                                                                                        CloseWindow( auxw );
+                                                                                        CloseScreen( auxs );
                                                                                     }
-                                                                                    CloseScreen( auxs );
+                                                                                    FreeBitMap( auxbm );
                                                                                 }
                                                                             }
                                                                         }
@@ -1145,6 +1292,9 @@ int main( void )
                                                     }
                                                     FreeMenus( menu );
                                                 }
+                                                deleteImage( images + IMG_SAVE );
+                                                deleteImage( images + IMG_LOAD );
+                                                deleteImage( images + IMG_CLEAR );
                                                 closeWindow( w, reg );
                                             }
                                             FreeBitMap( map.gfxBlit );

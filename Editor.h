@@ -27,9 +27,22 @@ enum
     E_COUNT
 };
 
+struct EdCell
+{
+    BYTE type, dir, index;
+};
+
+struct EdHeader
+{
+    WORD version;
+    UBYTE width, height;
+};
+
 struct Editor
 {
     WORD select;
+    struct EdHeader head;
+    struct EdCell map[ HEIGHT ][ WIDTH ];
 };
 
 IMPORT WORD ed[ E_COUNT ];
