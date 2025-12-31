@@ -27,8 +27,7 @@ WORD ed[ E_COUNT ] =
     T_SURPRISE,
     T_DEBRIS,
     T_MAGNET_LEFT,
-    T_MAGNET_RIGHT,
-    T_ROBBO
+    T_MAGNET_RIGHT    
 };
 
 VOID drawSelection( struct Window *w )

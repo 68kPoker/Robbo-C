@@ -1,6 +1,17 @@
 
+#ifndef EDITOR_H
+#define EDITOR_H
+
 #ifndef EXEC_TYPES_H
 #include <exec/types.h>
+#endif
+
+#ifndef CONST_H
+#include "Const.h"
+#endif
+
+#ifndef CELL_H
+#include "Cell.h"
 #endif
 
 enum
@@ -22,29 +33,31 @@ enum
     E_SURPRISE,
     E_DEBRIS,
     E_MAGNET_LEFT,
-    E_MAGNET_RIGHT,
-    E_ROBBO,
+    E_MAGNET_RIGHT,    
     E_COUNT
 };
 
-struct EdCell
+typedef struct EdCell
 {
     BYTE type, dir, index;
-};
+} EdCell;
 
 struct EdHeader
 {
     WORD version;
     UBYTE width, height;
+    UBYTE x, y;
 };
 
 struct Editor
 {
     WORD select;
     struct EdHeader head;
-    struct EdCell map[ HEIGHT ][ WIDTH ];
+    EdCell map[ HEIGHT ][ WIDTH ];
 };
 
 IMPORT WORD ed[ E_COUNT ];
 
 IMPORT VOID drawSelection( struct Window *w );
+
+#endif

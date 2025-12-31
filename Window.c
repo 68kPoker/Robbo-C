@@ -23,6 +23,7 @@
 #include "Blitter.h"
 #include "Window.h"
 #include "Editor.h"
+#include "debug.h"
 
 #define RGB(c) ((c)|((c)<<8)|((c)<<16)|((c)<<24))
 
@@ -93,11 +94,11 @@ struct NewMenu nm[] =
     { NM_TITLE, "Settings", 0, 0, 0, 0 },
     { NM_ITEM, "Show Title    ", "T", MENUTOGGLE | CHECKIT, 0, 0 },
     { NM_ITEM, NM_BARLABEL, 0, 0, 0, 0 },
-    { NM_ITEM, "Construct Mode", "M", MENUTOGGLE | CHECKIT, 0, 0 },
+    { IM_ITEM, ( STRPTR )(images + IMG_CLEAR), "M", MENUTOGGLE | CHECKIT, 0, 0},
     { NM_TITLE, "Construct", 0, NM_MENUDISABLED, 0, 0 },
-    { IM_ITEM, images + IMG_CLEAR, 0, 0, 0, 0 },
-    { IM_ITEM, images + IMG_LOAD, "O", 0, 0, 0 },
-    { IM_ITEM, images + IMG_SAVE, "S", 0, 0, 0 },
+    { NM_ITEM, "Clear", 0, 0, 0, 0 },
+    { IM_ITEM, ( STRPTR )(images + IMG_LOAD), "O", 0, 0, 0 },
+    { IM_ITEM, ( STRPTR )(images + IMG_SAVE), "S", 0, 0, 0 },
     { NM_ITEM, NM_BARLABEL, 0, 0, 0, 0 },
     { NM_ITEM, "Show Tools ", "B", MENUTOGGLE | CHECKIT | NM_ITEMDISABLED, 0, 0 },
     { NM_ITEM, "Show Cursor", "C", MENUTOGGLE | CHECKIT, 0, 0 },
@@ -251,11 +252,53 @@ VOID pasteTile( WORD type, WORD tile, struct Window *w, WORD x, WORD y )
 
 }
 
-VOID drawMap( struct Window *w, WORD dx, WORD dy, BOOL force )
+VOID drawEdMap( struct Window *w, WORD dx, WORD dy, BOOL force )
 {
     WORD x, y;
 
-    LockLayer( 0, w->WLayer );
+    for( y = 0; y < VIEW_HEIGHT; y++ )
+    {
+        for( x = 0; x < VIEW_WIDTH; x++ )
+        {
+            EdCell *cell = &map.ed.map[ y + dy ][ x + dx ];
+            Type *ptr = types + ( map.ed.head.x == x + dx && map.ed.head.y == y + dy ? T_ROBBO : ed[ cell->type ] );
+            WORD tile = ptr->base;
+
+            if( ptr->dirs )
+            {
+                WORD i;
+
+                if( cell->dir == LEFT )
+                {
+                    i = 0;
+                }
+                else if( cell->dir == RIGHT )
+                {
+                    i = 1;
+                }
+                else if( cell->dir == UP )
+                {
+                    i = 2;
+                }
+                else
+                {
+                    i = 3;
+                }
+                tile += i * ptr->count;
+            }
+
+            if( tile != tiles[ y ][ x ] || force )
+            {
+                tiles[ y ][ x ] = tile;
+                pasteTile( cell->type, tile, w, x * TILE_WIDTH, y * TILE_HEIGHT );
+            }
+        }
+    }
+}
+
+VOID drawMap( struct Window *w, WORD dx, WORD dy, BOOL force )
+{
+    WORD x, y;
 
     for( y = 0; y < VIEW_HEIGHT; y++ )
     {
@@ -309,7 +352,6 @@ VOID drawMap( struct Window *w, WORD dx, WORD dy, BOOL force )
         }
     }
 
-    UnlockLayer( w->WLayer );
     SetWriteMask( w->RPort, 0xff );
 }
 
@@ -345,72 +387,31 @@ VOID testMap( VOID )
     {
         for( j = 0; j < WIDTH; j++ )
         {
-            WORD type = T_SPACE, dir = 0;
+            WORD type = E_SPACE, dir = 0;
             switch( p[ i ][ j ] )
             {
-            case '#': type = T_WALL; break;
-            case '.': type = T_SPACE; break;
-            case 'R': type = T_ROBBO; break;
-            case 'S': type = T_BOX; break;
-            case 'K': type = T_WHEELED_BOX; break;
-            case 'G': type = T_DEBRIS; break;
-            case '[': type = T_LASER; dir = LEFT; break;
-            case '>': type = T_CANNON; dir = RIGHT; break;
-            case '+': type = T_CANNON; dir = UP; break;
-            case '$': type = T_SCREW; break;
-            case 'D': type = T_DOOR; break;
-            case 'L': type = T_KEY; break;
-            case 'A': type = T_AMMO; break;
-            case 'N': type = T_BAT; dir = DOWN; break;
-            case 'B': type = T_BOMB; break;
-            case 'M': type = T_MAGNET_RIGHT; break;
-            case 'C': type = T_CAPSULE; break;
+            case '#': type = E_WALL; break;
+            case '.': type = E_SPACE; break;
+            case 'R': map.ed.head.x = j; map.ed.head.y = i; break;
+            case 'S': type = E_BOX; break;
+            case 'K': type = E_WHEELED_BOX; break;
+            case 'G': type = E_DEBRIS; break;
+            case '[': type = E_LASER; dir = LEFT; break;
+            case '>': type = E_CANNON; dir = RIGHT; break;
+            case '+': type = E_CANNON; dir = UP; break;
+            case '$': type = E_SCREW; break;
+            case 'D': type = E_DOOR; break;
+            case 'L': type = E_KEY; break;
+            case 'A': type = E_AMMO; break;
+            case 'N': type = E_BAT; dir = DOWN; break;
+            case 'B': type = E_BOMB; break;
+            case 'M': type = E_MAGNET_RIGHT; break;
+            case 'C': type = E_CAPSULE; break;
             }
-            map.map[ i ][ j ].type = type;
-            map.map[ i ][ j ].dir = dir;
+            map.ed.map[ i ][ j ].type = type;
+            map.ed.map[ i ][ j ].dir = dir;
         }
     }
-
-    map.pos = 2 * WIDTH + 2;
-#if 0
-    map.map[ 2 ][ 2 ].type = T_ROBBO;
-    map.pos = 2 * WIDTH + 2;
-    map.map[ 2 ][ 4 ].type = T_SCREW;
-    map.map[ 4 ][ 2 ].type = T_SCREW;
-    for( i = 0; i <= 5; i++ )
-    {
-        map.map[ 6 ][ i ].type = T_WALL;
-        map.map[ i ][ 5 ].type = T_WALL;
-    }
-    map.map[ 4 ][ 5 ].type = T_SPACE;
-    map.map[ 2 ][ 7 ].type = T_AMMO;
-    map.map[ 3 ][ 7 ].type = T_WALL;
-    map.map[ 4 ][ 7 ].type = T_WALL;
-
-    map.map[ 5 ][ 9 ].type = T_DEBRIS;
-    map.map[ 5 ][ 10 ].type = T_DEBRIS;
-    map.map[ 4 ][ 10 ].type = T_DEBRIS;
-
-    map.map[ 2 ][ 12 ].type = T_BOX;
-    map.map[ 3 ][ 13 ].type = T_BOX;
-
-    map.map[ 2 ][ 14 ].type = T_SCREW;
-    for( i = 0; i <= 6; i++ )
-    {
-        map.map[ 6 ][ i + 9 ].type = T_WALL;
-    }
-    for( i = 0; i <= 4; i++ )
-    {
-        map.map[ i ][ 9 ].type = T_WALL;
-    }
-
-    map.map[ 12 ][ 12 ].type = T_BAT;
-    map.map[ 12 ][ 12 ].dir = UP;
-    map.map[ 12 ][ 14 ].type = T_BAT;
-    map.map[ 12 ][ 14 ].dir = DOWN;
-
-    map.map[ 7 ][ 14 ].type = T_KEY;
-#endif
 }
 
 BOOL unpackRow( BYTE **bufPtr, LONG *sizePtr, BYTE *dest, WORD bpr, UBYTE cmp )
@@ -707,7 +708,7 @@ VOID prepBG( VOID )
     planePickArray( map.gfx, TILE_WIDTH, TILE_HEIGHT, 20, 3, myPlanePick, FALSE );
 }
 
-VOID menuPick( struct Window *w, struct Menu *menu, UWORD code, BOOL *done, WORD *type, WORD *dir, BOOL *construct, struct Window **toolbox, ULONG *mask, WORD *toolx, WORD *tooly )
+VOID menuPick( struct Window *w, struct Menu *menu, UWORD code, BOOL *done, WORD *type, WORD *dir, BOOL *construct, struct Window **toolbox, ULONG *mask, WORD *toolx, WORD *tooly, VOID( **draw )( struct Window *w, WORD dx, WORD dy, BOOL force ) )
 {
     struct MenuItem *item;
     UWORD menuNum, itemNum, subNum;
@@ -758,6 +759,7 @@ VOID menuPick( struct Window *w, struct Menu *menu, UWORD code, BOOL *done, WORD
                     }
 
                     OnMenu( w, FULLMENUNUM( MENU_CONSTRUCT, NOITEM, NOITEM ) );
+                    *draw = drawEdMap;
                 }
                 else
                 {
@@ -770,7 +772,9 @@ VOID menuPick( struct Window *w, struct Menu *menu, UWORD code, BOOL *done, WORD
                         *toolbox = NULL;
                     }
                     SetWindowTitles( w, ( UBYTE * )~0, "RobboC: Game mode" );
-                    OffMenu( w, FULLMENUNUM( MENU_CONSTRUCT, NOITEM, NOITEM ) );                    
+                    OffMenu( w, FULLMENUNUM( MENU_CONSTRUCT, NOITEM, NOITEM ) );
+                    convertMap();
+                    *draw = drawMap;
                 }
             }
         }
@@ -852,13 +856,13 @@ int main( void )
     struct Region *reg;
     struct VisualInfo *vi;
     struct Menu *menu;
-
+    void( *draw )( struct Window *w, WORD dx, WORD dy, BOOL force ) = drawMap;
 
     dragBar.Activation = GACT_IMMEDIATE;
     dragBar.Flags = GFLG_GADGHNONE;
     dragBar.Width = 5 * TILE_WIDTH;
     dragBar.Height = 8;
-    dragBar.GadgetType = GTYP_WDRAGGING;    
+    dragBar.GadgetType = GTYP_WDRAGGING;
 
     if( IntuitionBase = OpenLibrary( "intuition.library", VERS ) )
     {
@@ -874,12 +878,15 @@ int main( void )
                         {
                             if( map.back = readPicture( "Back.iff", &s ) )
                             {
+                                D( bug( "Back.iff Picture read.\n" ) );
                                 map.rp = &s->RastPort;
                                 if( vi = GetVisualInfo( s, TAG_DONE ) )
                                 {
                                     if( map.gfx = readPicture( "Gfx.iff", NULL ) )
                                     {
+                                        D( bug( "Gfx.iff picture read.\n" ) );
                                         prepBG();
+                                        D( bug( "Background prepared.\n" ) );;
                                         if( map.gfxBlit = AllocBitMap( 320, 128, map.back->Depth, BMF_INTERLEAVED, NULL ) )
                                         {
                                             BltBitMap( map.gfx, 0, 0, map.gfxBlit, 0, 0, 320, 128, 0xc0, 0xff, NULL );
@@ -888,8 +895,10 @@ int main( void )
                                             createImage( images + IMG_SAVE, map.gfxBlit, 32, 48, TILE_WIDTH, TILE_HEIGHT );
                                             createImage( images + IMG_AMIGA, map.gfxBlit, 48, 48, TILE_WIDTH, 10 );
                                             createImage( images + IMG_CHECK, map.gfxBlit, 64, 48, TILE_WIDTH, 10 );
+                                            D( bug( "Images created.\n" ) );
                                             if( w = openWindow( s, &reg ) )
                                             {
+                                                D( bug( "Window opened.\n" ) );
                                                 if( menu = CreateMenus( nm, TAG_DONE ) )
                                                 {
                                                     if( LayoutMenus( menu, vi, GTMN_NewLookMenus, TRUE, TAG_DONE ) )
@@ -899,8 +908,8 @@ int main( void )
                                                         WORD i;
                                                         BOOL view = FALSE, paint = FALSE;
                                                         WORD px, py;
-                                                        BYTE dir = 0;
-                                                        WORD curType = T_SCREW, curDir = LEFT;
+                                                        BYTE dir = 0, actDir = 0;
+                                                        WORD curType = E_SCREW, curDir = LEFT;
                                                         ULONG mask[ 2 ] = { 0 };
                                                         WORD toolx = 0, tooly = s->BarHeight + 1;
 
@@ -910,17 +919,22 @@ int main( void )
 
                                                         initTypes();
                                                         initMap();
+                                                        D( bug( "Edit map created.\n" ) );
                                                         testMap();
+                                                        D( bug( "Created test map.\n" ) );
+                                                        convertMap();
 
                                                         drawPanel( w );
-                                                        drawMap( w, dx, dy, TRUE );
-                                                        drawSelection( w );                                                        
+
+                                                        draw( w, dx, dy, TRUE );
+                                                        D( bug( "Map drawn.\n" ) );
+                                                        drawSelection( w );
 
                                                         WaitBlit();
                                                         ScreenToFront( s );
                                                         while( !done && !map.done )
                                                         {
-                                                            struct IntuiMessage *msg;
+                                                            struct IntuiMessage *msg;                                                            
 
                                                             if( !construct )
                                                             {
@@ -928,7 +942,7 @@ int main( void )
                                                             }
 
                                                             if( view || construct )
-                                                            {
+                                                            {                                                                                                                          
                                                                 ty += dir / WIDTH;
                                                             }
                                                             else if( ( ( map.pos / WIDTH ) - dy ) < 1 || ( ( map.pos / WIDTH ) - dy ) > VIEW_HEIGHT - 2 )
@@ -955,7 +969,7 @@ int main( void )
                                                             }
 
                                                             WaitTOF();
-                                                            drawMap( w, dx, dy, FALSE );
+                                                            draw( w, dx, dy, FALSE );
                                                             updatePanel( w );
 
                                                             if( SetSignal( 0L, mask[ 1 ] ) & mask[ 1 ] )
@@ -979,7 +993,7 @@ int main( void )
                                                                             WORD type = ( ( my - 1 - 8 ) / ( TILE_HEIGHT + 1 ) ) * 5 + ( ( mx - 1 ) / ( TILE_WIDTH + 1 ) );
                                                                             if( type >= 0 && type < E_COUNT )
                                                                             {
-                                                                                curType = ed[ type ];
+                                                                                curType = type;
                                                                             }
                                                                         }
                                                                         else if( code == IECODE_RBUTTON )
@@ -1013,7 +1027,7 @@ int main( void )
                                                                     }
                                                                     else if( cls == IDCMP_MENUPICK )
                                                                     {
-                                                                        menuPick( w, menu, code, &done, &curType, &curDir, &construct, &toolbox, mask, &toolx, &tooly );
+                                                                        menuPick( w, menu, code, &done, &curType, &curDir, &construct, &toolbox, mask, &toolx, &tooly, &draw );
                                                                     }
                                                                     else if( cls == IDCMP_MOUSEBUTTONS )
                                                                     {
@@ -1029,7 +1043,7 @@ int main( void )
 
                                                                                     paint = TRUE;
 
-                                                                                    if( curType == T_CANNON || curType == T_LASER || curType == T_BLASTER || curType == T_BAT )
+                                                                                    if( curType == E_CANNON || curType == E_LASER || curType == E_BLASTER || curType == E_BAT )
                                                                                     {
                                                                                         dir = curDir;
                                                                                     }
@@ -1037,7 +1051,7 @@ int main( void )
                                                                                     {
                                                                                         dir = 0;
                                                                                     }
-                                                                                    updateCell( &map.map[ y + dy ][ x + dx ], curType, dir, 0 );
+                                                                                    setCell( &map.ed.map[ y + dy ][ x + dx ], curType, dir, 0 );
                                                                                     px = x;
                                                                                     py = y;
                                                                                 }
@@ -1084,9 +1098,9 @@ int main( void )
                                                                             {
                                                                                 if( x != px || y != py )
                                                                                 {
-                                                                                    WORD dir;                                                                                 
+                                                                                    WORD dir;
 
-                                                                                    if( curType == T_CANNON || curType == T_LASER || curType == T_BLASTER || curType == T_BAT )
+                                                                                    if( curType == E_CANNON || curType == E_LASER || curType == E_BLASTER || curType == E_BAT )
                                                                                     {
                                                                                         dir = curDir;
                                                                                     }
@@ -1094,7 +1108,7 @@ int main( void )
                                                                                     {
                                                                                         dir = 0;
                                                                                     }
-                                                                                    updateCell( &map.map[ y + dy ][ x + dx ], curType, dir, 0 );
+                                                                                    setCell( &map.ed.map[ y + dy ][ x + dx ], curType, dir, 0 );
                                                                                     px = x;
                                                                                     py = y;
                                                                                 }
@@ -1224,21 +1238,15 @@ int main( void )
                                                                         }
                                                                         else if( code == ( LEFT_KEY | IECODE_UP_PREFIX ) )
                                                                         {
-                                                                            if( dir == LEFT )
-                                                                            {
-                                                                                dir = 0;
-                                                                            }
+                                                                            dir = 0;
                                                                         }
                                                                         else if( code == RIGHT_KEY )
                                                                         {
                                                                             dir = RIGHT;
                                                                         }
                                                                         else if( code == ( RIGHT_KEY | IECODE_UP_PREFIX ) )
-                                                                        {
-                                                                            if( dir == RIGHT )
-                                                                            {
-                                                                                dir = 0;
-                                                                            }
+                                                                        {                                                                                                                                                        
+                                                                            dir = 0;                                                                            
                                                                         }
                                                                         else if( code == UP_KEY )
                                                                         {
@@ -1246,21 +1254,15 @@ int main( void )
                                                                         }
                                                                         else if( code == ( UP_KEY | IECODE_UP_PREFIX ) )
                                                                         {
-                                                                            if( dir == UP )
-                                                                            {
-                                                                                dir = 0;
-                                                                            }
+                                                                            dir = 0;
                                                                         }
                                                                         else if( code == DOWN_KEY )
                                                                         {
                                                                             dir = DOWN;
                                                                         }
                                                                         else if( code == ( DOWN_KEY | IECODE_UP_PREFIX ) )
-                                                                        {
-                                                                            if( dir == DOWN )
-                                                                            {
-                                                                                dir = 0;
-                                                                            }
+                                                                        {                                                                                                                                                        
+                                                                            dir = 0;                                                                            
                                                                         }
                                                                         if( qual & ( IEQUALIFIER_LSHIFT | IEQUALIFIER_RSHIFT ) )
                                                                         {
@@ -1272,7 +1274,7 @@ int main( void )
                                                                         }
                                                                         if( qual & ( IEQUALIFIER_LALT | IEQUALIFIER_RALT ) )
                                                                         {
-                                                                            view = TRUE;
+                                                                            view = TRUE;                                                           
                                                                         }
                                                                         else
                                                                         {

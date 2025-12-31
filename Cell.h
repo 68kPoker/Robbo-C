@@ -1,11 +1,20 @@
 
+#ifndef CELL_H
+#define CELL_H
+
 #ifndef EXEC_TYPES_H
 #include <exec/types.h>
 #endif
 
+#ifndef CONST_H
+#include "Const.h"
+#endif
+
+#ifndef EDITOR_H
+#include "Editor.h"
+#endif
+
 #define DELAY 6
-#define WIDTH 16
-#define HEIGHT 20
 
 #define LEFT -1
 #define RIGHT 1
@@ -88,6 +97,7 @@ typedef struct Map
     BOOL done;
     struct BitMap *back, *gfxBlit;
     WORD dx, dy;
+    struct Editor ed;
 } Map;
 
 typedef BOOL Enter( Cell *cell, WORD as, WORD dir, WORD frame );
@@ -118,3 +128,9 @@ extern VOID updateCell( Cell *cell, WORD type, WORD dir, WORD frame );
 extern VOID scanMap( VOID );
 
 extern VOID initMap( VOID );
+
+extern VOID setCell( EdCell *cell, WORD type, WORD dir, WORD index );
+
+extern BOOL convertMap( VOID );
+
+#endif

@@ -14,10 +14,10 @@ all: Robbo.exe
 Robbo.exe: Window.o Type.o Editor.o Blitter.o
   $(link) $(lflags) $@ $**
 
-Window.o: Window.h Cell.h Blitter.h Editor.h
+Window.o: Window.h Cell.h Blitter.h Editor.h Const.h
 
-Editor.o: Editor.h Window.h Cell.h
+Editor.o: Editor.h Window.h Cell.h Const.h
 
 Blitter.o: Blitter.h
 
-Type.o: Cell.h
+Type.o: Cell.h Editor.h Const.h

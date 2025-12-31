@@ -2,6 +2,7 @@
 #include <stdlib.h>
 
 #include "Cell.h"
+#include "Editor.h"
 
 #define SHOOT_PROB 0x08
 
@@ -477,6 +478,41 @@ VOID initTypes( VOID )
     dupFrames( T_STREAM, T_EXPLOSION );    
 }
 
+BOOL convertMap( VOID )
+{
+    WORD x, y;
+    Cell *cell;
+
+    for( y = 0; y < HEIGHT; y++ )
+    {
+        for( x = 0; x < WIDTH; x++ )
+        {
+            EdCell *edCell = &map.ed.map[ y ][ x ];
+
+            cell = &map.map[ y ][ x ];
+
+            cell->type = ed[ edCell->type ];
+            cell->dir = edCell->dir;
+            cell->index = edCell->index;
+        }
+    }
+
+    map.pos = map.ed.head.y * WIDTH + map.ed.head.x;
+
+    cell = ( Cell * )map.map + map.pos;
+
+    cell->type = T_ROBBO;
+    cell->dir = 0;
+    return( TRUE );
+}
+
+VOID setCell( EdCell *cell, WORD type, WORD dir, WORD index )
+{
+    cell->type = type;
+    cell->dir = dir;
+    cell->index = index;
+}
+
 VOID initMap( VOID )
 {
     WORD x, y;
@@ -485,24 +521,22 @@ VOID initMap( VOID )
     {
         for( x = 0; x < WIDTH; x++ )
         {
-            Cell *cell = &map.map[ y ][ x ];
+            EdCell *edCell = &map.ed.map[ y ][ x ];
 
             if( x == 0 || x == WIDTH - 1 || y == 0 || y == HEIGHT - 1 )
             {
-                cell->type = T_WALL;
+                edCell->type = E_WALL;
             }
             else
             {
-                cell->type = T_SPACE;                
+                edCell->type = E_SPACE;                
             }
-            cell->frame = 0;
-            cell->index = 0;
-            cell->delay = 0;            
+            edCell->dir = 0;
+            edCell->index = 0;
         }
     }
-    map.map[ 1 ][ 1 ].type = T_ROBBO;
-    map.map[ 1 ][ 1 ].dir = 0;
-    map.pos = 1 * WIDTH + 1;
+    map.ed.head.x = 1;
+    map.ed.head.y = 1;
 }
 
 VOID updateCell( Cell *cell, WORD type, WORD dir, WORD frame )
