@@ -494,6 +494,8 @@ BOOL convertMap( VOID )
             cell->type = ed[ edCell->type ];
             cell->dir = edCell->dir;
             cell->index = edCell->index;
+            cell->frame = 0;
+            cell->delay = 0;
         }
     }
 

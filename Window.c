@@ -290,10 +290,13 @@ VOID drawEdMap( struct Window *w, WORD dx, WORD dy, BOOL force )
             if( tile != tiles[ y ][ x ] || force )
             {
                 tiles[ y ][ x ] = tile;
+                SetWriteMask( w->RPort, 0xff );
                 pasteTile( cell->type, tile, w, x * TILE_WIDTH, y * TILE_HEIGHT );
             }
         }
     }
+
+    SetWriteMask( w->RPort, 0xff );
 }
 
 VOID drawMap( struct Window *w, WORD dx, WORD dy, BOOL force )
@@ -342,9 +345,11 @@ VOID drawMap( struct Window *w, WORD dx, WORD dy, BOOL force )
 
             if( tile != tiles[ y ][ x ] || force )
             {
+#if 0
                 UWORD prev = myPlanePick[ tiles[ y ][ x ] ], cur = myPlanePick[ tile ];
 
                 SetWriteMask( w->RPort, ( prev & 0xff ) | ( cur & 0xff ) | ( ( prev >> 8 ) ^ ( cur >> 8 ) ) );
+#endif
 
                 tiles[ y ][ x ] = tile;
                 pasteTile( cell->type, tile, w, x * TILE_WIDTH, y * TILE_HEIGHT );
@@ -1021,7 +1026,7 @@ int main( void )
                                                                     {
                                                                         BeginRefresh( w );
                                                                         drawPanel( w );
-                                                                        drawMap( w, dx, dy, TRUE );
+                                                                        draw( w, dx, dy, TRUE );
                                                                         updatePanel( w );
                                                                         EndRefresh( w, TRUE );
                                                                     }
