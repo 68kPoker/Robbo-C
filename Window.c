@@ -5,10 +5,12 @@
 #include <datatypes/pictureclass.h>
 #include <libraries/iffparse.h>
 #include <exec/memory.h>
+#include <exec/interrupts.h>
 #include <libraries/gadtools.h>
 #include <libraries/asl.h>
 #include <graphics/scale.h>
 #include <graphics/videocontrol.h>
+#include <hardware/intbits.h>
 
 #include <clib/intuition_protos.h>
 #include <clib/graphics_protos.h>
@@ -34,6 +36,13 @@ struct Library *IntuitionBase, *GfxBase, *GadToolsBase, *LayersBase, *IFFParseBa
 WORD tiles[ VIEW_HEIGHT ][ VIEW_WIDTH ];
 
 UWORD myPlanePick[ 60 ];
+
+struct Interrupt is;
+
+struct Task *sigTask;
+WORD sigBit;
+
+struct ViewPort *viewPort;
 
 enum
 {
@@ -77,10 +86,10 @@ enum
 
 enum
 {
-    DIR_LEFT,
-    DIR_RIGHT,
-    DIR_UP,
-    DIR_DOWN
+    LEFT_DIR,
+    RIGHT_DIR,
+    UP_DIR,
+    DOWN_DIR
 };
 
 struct Image images[ IMAGES ];
@@ -713,7 +722,7 @@ VOID prepBG( VOID )
     planePickArray( map.gfx, TILE_WIDTH, TILE_HEIGHT, 20, 3, myPlanePick, FALSE );
 }
 
-VOID menuPick( struct Window *w, struct Menu *menu, UWORD code, BOOL *done, WORD *type, WORD *dir, BOOL *construct, struct Window **toolbox, ULONG *mask, WORD *toolx, WORD *tooly, VOID( **draw )( struct Window *w, WORD dx, WORD dy, BOOL force ) )
+VOID menuPick( struct Window *w, struct Menu *menu, UWORD code, BOOL *done, WORD *type, WORD *dir, BOOL *construct, struct Window **toolbox, ULONG *mask, WORD *toolx, WORD *tooly, VOID( **draw )( struct Window *w, WORD dx, WORD dy, BOOL force ), ULONG *total )
 {
     struct MenuItem *item;
     UWORD menuNum, itemNum, subNum;
@@ -759,6 +768,7 @@ VOID menuPick( struct Window *w, struct Menu *menu, UWORD code, BOOL *done, WORD
                     if( !*toolbox )
                     {
                         *toolbox = openToolbox( w, *toolx, *tooly, mask );
+                        *total |= mask[ 1 ];
                         SetWindowTitles( *toolbox, ( UBYTE * )~0, "RobboC: Constructor" );
                         SetWindowTitles( w, ( UBYTE * )~0, "RobboC: Constructor" );
                     }
@@ -773,6 +783,7 @@ VOID menuPick( struct Window *w, struct Menu *menu, UWORD code, BOOL *done, WORD
                         *toolx = ( *toolbox )->LeftEdge;
                         *tooly = ( *toolbox )->TopEdge;
                         CloseWindow( *toolbox );
+                        *total &= ~mask[ 1 ];
                         mask[ 1 ] = 0L;
                         *toolbox = NULL;
                     }
@@ -854,6 +865,19 @@ void closeToolbox( struct Window *toolbox, ULONG *mask )
 
 }
 
+#ifndef WIN32
+__saveds
+#endif
+
+LONG myVBlank(void )
+{
+    if( !( viewPort->Modes & VP_HIDE ) )
+    {
+        Signal( sigTask, 1L << sigBit );
+    }
+    return( 0 );
+}
+
 int main( void )
 {
     struct Screen *s;
@@ -862,6 +886,19 @@ int main( void )
     struct VisualInfo *vi;
     struct Menu *menu;
     void( *draw )( struct Window *w, WORD dx, WORD dy, BOOL force ) = drawMap;
+    UBYTE set = 0, clear = 0; /* Directions set and clared */
+    UBYTE scrollDelay = 0;
+
+    if( ( sigBit = AllocSignal( -1 ) ) == -1 )
+    {
+        return( RETURN_FAIL );
+    }
+
+    sigTask = FindTask( NULL );
+
+    is.is_Code = ( void( * )( ) )myVBlank;
+    is.is_Data = NULL;
+    is.is_Node.ln_Pri = 0;
 
     dragBar.Activation = GACT_IMMEDIATE;
     dragBar.Flags = GFLG_GADGHNONE;
@@ -885,6 +922,10 @@ int main( void )
                             {
                                 D( bug( "Back.iff Picture read.\n" ) );
                                 map.rp = &s->RastPort;
+                                viewPort = &s->ViewPort;
+
+                                AddIntServer( INTB_VERTB, &is );
+
                                 if( vi = GetVisualInfo( s, TAG_DONE ) )
                                 {
                                     if( map.gfx = readPicture( "Gfx.iff", NULL ) )
@@ -913,12 +954,13 @@ int main( void )
                                                         WORD i;
                                                         BOOL view = FALSE, paint = FALSE;
                                                         WORD px, py;
-                                                        BYTE dir = 0, actDir = 0;
+                                                        BYTE dir = 0;
                                                         WORD curType = E_SCREW, curDir = LEFT;
-                                                        ULONG mask[ 2 ] = { 0 };
-                                                        WORD toolx = 0, tooly = s->BarHeight + 1;
+                                                        ULONG mask[ 3 ] = { 0 }, total = 0L;
+                                                        WORD toolx = 0, tooly = s->Height;
 
-                                                        mask[ 0 ] = 1L << w->UserPort->mp_SigBit;
+                                                        total = mask[ 0 ] = 1L << w->UserPort->mp_SigBit;
+                                                        total |= mask[ 2 ] = 1L << sigBit;
 
                                                         SetMenuStrip( w, menu );
 
@@ -939,45 +981,110 @@ int main( void )
                                                         ScreenToFront( s );
                                                         while( !done && !map.done )
                                                         {
-                                                            struct IntuiMessage *msg;                                                            
+                                                            struct IntuiMessage *msg;
 
-                                                            if( !construct )
+                                                            ULONG result = Wait( total );
+
+                                                            if( result & mask[ 2 ] )
                                                             {
-                                                                scanMap();
+                                                                if( clear )
+                                                                {
+                                                                    if( clear & ( 1 << LEFT_DIR ) )
+                                                                    {
+                                                                        set &= ~( 1 << LEFT_DIR );
+                                                                    }
+                                                                    if( clear & ( 1 << RIGHT_DIR ) )
+                                                                    {
+                                                                        set &= ~( 1 << RIGHT_DIR );
+                                                                    }
+                                                                    if( clear & ( 1 << UP_DIR ) )
+                                                                    {
+                                                                        set &= ~( 1 << UP_DIR );
+                                                                    }
+                                                                    if( clear & ( 1 << DOWN_DIR ) )
+                                                                    {
+                                                                        set &= ~( 1 << DOWN_DIR );
+                                                                    }
+                                                                    clear = 0;
+                                                                }
+
+                                                                if( set )
+                                                                {
+                                                                    if( set & ( 1 << LEFT_DIR ) )
+                                                                    {
+                                                                        dir = LEFT;
+                                                                    }
+                                                                    else if( set & ( 1 << RIGHT_DIR ) )
+                                                                    {
+                                                                        dir = RIGHT;
+                                                                    }
+                                                                    else if( set & ( 1 << UP_DIR ) )
+                                                                    {
+                                                                        dir = UP;
+                                                                    }
+                                                                    else if( set & ( 1 << DOWN_DIR ) )
+                                                                    {
+                                                                        dir = DOWN;
+                                                                    }
+                                                                }
+                                                                else
+                                                                {
+                                                                    dir = 0;
+                                                                }
+
+                                                                if( !view && !construct )
+                                                                {
+                                                                    map.dir = dir;
+                                                                }
+
+                                                                if( scrollDelay > 0 )
+                                                                {
+                                                                    scrollDelay--;
+                                                                }
+                                                                else if( scrollDelay == 0 )
+                                                                {
+                                                                    if( dir )
+                                                                    {
+                                                                        scrollDelay = DELAY;
+                                                                    }
+                                                                    if( view || construct )
+                                                                    {
+                                                                        ty += dir / WIDTH;
+                                                                    }
+                                                                    else if( ( ( map.pos / WIDTH ) - dy ) < 1 || ( ( map.pos / WIDTH ) - dy ) > VIEW_HEIGHT - 2 )
+                                                                    {
+                                                                        ty = ( map.pos / WIDTH ) - ( VIEW_HEIGHT / 2 );
+                                                                    }
+                                                                }
+
+                                                                if( ty < 0 )
+                                                                {
+                                                                    ty = 0;
+                                                                }
+                                                                else if( ty > HEIGHT - VIEW_HEIGHT )
+                                                                {
+                                                                    ty = HEIGHT - VIEW_HEIGHT;
+                                                                }
+
+                                                                if( ty > dy )
+                                                                {
+                                                                    dy++;
+                                                                }
+                                                                else if( ty < dy )
+                                                                {
+                                                                    dy--;
+                                                                }
+
+                                                                if( !construct )
+                                                                {
+                                                                    scanMap();
+                                                                }
+
+                                                                draw( w, dx, dy, FALSE );
+                                                                updatePanel( w );
                                                             }
 
-                                                            if( view || construct )
-                                                            {                                                                                                                          
-                                                                ty += dir / WIDTH;
-                                                            }
-                                                            else if( ( ( map.pos / WIDTH ) - dy ) < 1 || ( ( map.pos / WIDTH ) - dy ) > VIEW_HEIGHT - 2 )
-                                                            {
-                                                                ty = ( map.pos / WIDTH ) - ( VIEW_HEIGHT / 2 );
-                                                            }
-
-                                                            if( ty < 0 )
-                                                            {
-                                                                ty = 0;
-                                                            }
-                                                            else if( ty > HEIGHT - VIEW_HEIGHT )
-                                                            {
-                                                                ty = HEIGHT - VIEW_HEIGHT;
-                                                            }
-
-                                                            if( ty > dy )
-                                                            {
-                                                                dy++;
-                                                            }
-                                                            else if( ty < dy )
-                                                            {
-                                                                dy--;
-                                                            }
-
-                                                            WaitTOF();
-                                                            draw( w, dx, dy, FALSE );
-                                                            updatePanel( w );
-
-                                                            if( SetSignal( 0L, mask[ 1 ] ) & mask[ 1 ] )
+                                                            if( result & mask[ 1 ] )
                                                             {
                                                                 while( ( msg = ( struct IntuiMessage * )GetMsg( toolbox->UserPort ) ) )
                                                                 {
@@ -1004,6 +1111,7 @@ int main( void )
                                                                         else if( code == IECODE_RBUTTON )
                                                                         {
                                                                             CloseWindow( toolbox );
+                                                                            total &= ~mask[ 1 ];
                                                                             mask[ 1 ] = 0L;
                                                                             toolbox = NULL;
                                                                             break;
@@ -1012,7 +1120,7 @@ int main( void )
                                                                 }
                                                             }
 
-                                                            if( SetSignal( 0L, mask[ 0 ] ) & mask[ 0 ] )
+                                                            if( result & mask[ 0 ] )
                                                             {
                                                                 while( msg = ( struct IntuiMessage * )GetMsg( w->UserPort ) )
                                                                 {
@@ -1032,7 +1140,7 @@ int main( void )
                                                                     }
                                                                     else if( cls == IDCMP_MENUPICK )
                                                                     {
-                                                                        menuPick( w, menu, code, &done, &curType, &curDir, &construct, &toolbox, mask, &toolx, &tooly, &draw );
+                                                                        menuPick( w, menu, code, &done, &curType, &curDir, &construct, &toolbox, mask, &toolx, &tooly, &draw, &total );
                                                                     }
                                                                     else if( cls == IDCMP_MOUSEBUTTONS )
                                                                     {
@@ -1073,6 +1181,7 @@ int main( void )
                                                                                 toolx = toolbox->LeftEdge;
                                                                                 tooly = toolbox->TopEdge;
                                                                                 CloseWindow( toolbox );
+                                                                                total &= ~mask[ 1 ];
                                                                                 mask[ 1 ] = 0L;
                                                                                 toolbox = NULL;
                                                                             }
@@ -1239,35 +1348,35 @@ int main( void )
                                                                         }
                                                                         else if( code == LEFT_KEY )
                                                                         {
-                                                                            dir = LEFT;
+                                                                            set |= 1 << LEFT_DIR;
                                                                         }
                                                                         else if( code == ( LEFT_KEY | IECODE_UP_PREFIX ) )
                                                                         {
-                                                                            dir = 0;
+                                                                            clear |= 1 << LEFT_DIR;
                                                                         }
                                                                         else if( code == RIGHT_KEY )
                                                                         {
-                                                                            dir = RIGHT;
+                                                                            set |= 1 << RIGHT_DIR;
                                                                         }
                                                                         else if( code == ( RIGHT_KEY | IECODE_UP_PREFIX ) )
                                                                         {                                                                                                                                                        
-                                                                            dir = 0;                                                                            
+                                                                            clear |= 1 << RIGHT_DIR;
                                                                         }
                                                                         else if( code == UP_KEY )
                                                                         {
-                                                                            dir = UP;
+                                                                            set |= 1 << UP_DIR;
                                                                         }
                                                                         else if( code == ( UP_KEY | IECODE_UP_PREFIX ) )
                                                                         {
-                                                                            dir = 0;
+                                                                            clear |= 1 << UP_DIR;
                                                                         }
                                                                         else if( code == DOWN_KEY )
                                                                         {
-                                                                            dir = DOWN;
+                                                                            set |= 1 << DOWN_DIR;
                                                                         }
                                                                         else if( code == ( DOWN_KEY | IECODE_UP_PREFIX ) )
                                                                         {                                                                                                                                                        
-                                                                            dir = 0;                                                                            
+                                                                            clear |= 1 << DOWN_DIR;
                                                                         }
                                                                         if( qual & ( IEQUALIFIER_LSHIFT | IEQUALIFIER_RSHIFT ) )
                                                                         {
@@ -1283,8 +1392,7 @@ int main( void )
                                                                         }
                                                                         else
                                                                         {
-                                                                            view = FALSE;
-                                                                            map.dir = dir;
+                                                                            view = FALSE;                                                                            
                                                                         }
                                                                     }
                                                                     ReplyMsg( ( struct Message * )msg );
@@ -1310,6 +1418,7 @@ int main( void )
                                     }
                                     FreeVisualInfo( vi );
                                 }
+                                RemIntServer( INTB_VERTB, &is );
                                 freePicture( map.back, s );
                             }
                             CloseLibrary( AslBase );
@@ -1323,6 +1432,7 @@ int main( void )
             CloseLibrary( GfxBase );
         }
         CloseLibrary( IntuitionBase );
-    }
+    }    
+    FreeSignal( sigBit );
     return( 0 );
 }
