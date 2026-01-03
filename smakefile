@@ -1,0 +1,29 @@
+
+# Robbo-C
+
+cc = sc
+link = slink
+cflags = nostkchk nominc streq data=near
+lflags = batch nodebug smallcode
+STARTUP = LIB:c.o
+LIBS    = LIB:sc.lib, LIB:amiga.lib
+
+all: Robbo.exe
+
+.c.o:
+  $(cc) $(cflags) $*.c
+
+Window.o: Window.h Cell.h Blitter.h Editor.h Const.h
+
+Editor.o: Editor.h Window.h Cell.h Const.h
+
+Blitter.o: Blitter.h
+
+Type.o: Cell.h Editor.h Const.h
+
+Robbo.exe: Window.o Type.o Editor.o Blitter.o
+  $(link) <WITH <
+FROM $(STARTUP) Window.o Type.o Editor.o Blitter.o
+LIBRARY $(LIBS)
+TO Robbo.exe $(LFLAGS)
+<

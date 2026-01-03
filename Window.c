@@ -35,6 +35,8 @@ struct Library *IntuitionBase, *GfxBase, *GadToolsBase, *LayersBase, *IFFParseBa
 
 WORD tiles[ VIEW_HEIGHT ][ VIEW_WIDTH ];
 
+PLANEPTR planes[ VIEW_HEIGHT ][ VIEW_WIDTH ];
+
 UWORD myPlanePick[ 60 ];
 
 struct Interrupt is;
@@ -311,9 +313,19 @@ VOID drawEdMap( struct Window *w, WORD dx, WORD dy, BOOL force )
 VOID drawMap( struct Window *w, WORD dx, WORD dy, BOOL force )
 {
     WORD x, y;
+    WORD start;
+    struct BitMap *bm = w->RPort->BitMap;
+    PLANEPTR dest = bm->Planes[ 0 ];
+    UBYTE depth = bm->Depth;
+    WORD height = depth << 4;
+    WORD srcMod = ( map.gfxBlit->BytesPerRow / depth ) - 2;
+    WORD destMod = ( bm->BytesPerRow / depth ) - 2;
+
+    LockLayer( 0, w->WLayer );
 
     for( y = 0; y < VIEW_HEIGHT; y++ )
     {
+        start = 0;
         for( x = 0; x < VIEW_WIDTH; x++ )
         {
             Cell *cell = &map.map[ y + dy ][ x + dx ];
@@ -361,10 +373,29 @@ VOID drawMap( struct Window *w, WORD dx, WORD dy, BOOL force )
 #endif
 
                 tiles[ y ][ x ] = tile;
+
+                planes[ y ][ x ] = map.gfxBlit->Planes[ 0 ] + ( map.gfxBlit->BytesPerRow << 4 ) * ( tile / 20 ) + ( ( tile % 20 ) << 1 );
+#if 0
                 pasteTile( cell->type, tile, w, x * TILE_WIDTH, y * TILE_HEIGHT );
+#endif
+            }
+            else
+            {
+                if( x > start )
+                {
+                    writeTileLine( planes[ y ] + start, dest + ( start << 1 ), 1, height, srcMod, destMod, x - start );
+                }
+                start = x + 1;
             }
         }
+        if( x > start )
+        {
+            writeTileLine( planes[ y ] + start, dest + ( start << 1 ), 1, height, srcMod, destMod, x - start );
+        }
+        dest += bm->BytesPerRow << 4;
     }
+
+    UnlockLayer( w->WLayer );
 
     SetWriteMask( w->RPort, 0xff );
 }
@@ -1045,7 +1076,7 @@ int main( void )
                                                                 {
                                                                     if( dir )
                                                                     {
-                                                                        scrollDelay = DELAY;
+                                                                        scrollDelay = 0;
                                                                     }
                                                                     if( view || construct )
                                                                     {

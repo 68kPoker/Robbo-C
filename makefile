@@ -3,7 +3,7 @@
 
 cc = vc
 link = vc
-cflags = +aos68k -c
+cflags = +aos68k -O=15 -c
 lflags = +aos68k -lamiga -o
 
 all: Robbo.exe

@@ -483,3 +483,61 @@ VOID drawTileRastPort( struct BitMap *gfx, WORD sx, WORD sy, struct RastPort *rp
 
     UnlockLayer( layer );
 }
+
+/* Optimized tile/map functions */
+
+VOID writeTileLine( REG( a0 ) PLANEPTR src[], REG( a1 ) PLANEPTR dest, REG( d0 ) WORD wordWidth, REG( d1 ) WORD height, REG( d2 ) WORD srcMod, WORD REG( d3 ) destMod, REG( d4 ) WORD len )
+{
+    REGISTER struct Custom *c;
+    REGISTER WORD i;
+
+    OwnBlitter();
+
+    c = &custom;
+
+    for( i = 0; i < len; i++ )
+    {
+        WaitBlit();
+
+        c->bltcon0 = A_TO_D | SRCA | DEST;
+        c->bltcon1 = 0;
+        c->bltapt = src[ i ];
+        c->bltdpt = dest;        
+        c->bltamod = srcMod;
+        c->bltdmod = destMod;
+        c->bltafwm = 0xFFFF;
+        c->bltalwm = 0xFFFF;
+        c->bltsize = ( height << HSIZEBITS ) | wordWidth;
+
+        dest += wordWidth << 1;
+    }
+
+    DisownBlitter();
+}
+
+VOID writeTileBound( REG( a0 ) PLANEPTR src, REG( a1 ) PLANEPTR dest, REG( d0 ) WORD wordWidth, REG( d1 ) WORD height, REG( d2 ) WORD srcMod, WORD REG( d3 ) destMod, REG( d4 ) WORD x0, REG( d5 ) WORD x1 )
+{
+    REGISTER struct Custom *c;
+    REGISTER WORD i;
+
+    OwnBlitter();
+
+    c = &custom;
+
+    WaitBlit();
+
+    c->bltcon0 = ABC | ABNC | NABC | NANBC | SRCB | SRCC | DEST;
+    c->bltcon1 = 0;
+    c->bltadat = 0xFFFF;
+    c->bltbpt = src;
+    c->bltcpt = dest;
+    c->bltdpt = dest;
+    c->bltbmod = srcMod;
+    c->bltcmod = destMod;
+    c->bltdmod = destMod;
+    c->bltafwm = 0xFFFF >> x0;
+    c->bltalwm = 0xFFFF << ( 15 - x1 );
+    c->bltsize = ( height << HSIZEBITS ) | wordWidth;
+
+    DisownBlitter();
+}
