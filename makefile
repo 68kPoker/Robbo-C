@@ -3,7 +3,7 @@
 
 cc = vc
 link = vc
-cflags = +aos68k -O=15 -c
+cflags = +aos68k -c
 lflags = +aos68k -lamiga -o
 
 all: Robbo.exe
@@ -11,7 +11,7 @@ all: Robbo.exe
 .c.o:
   $(cc) $(cflags) $*.c
 
-Robbo.exe: Window.o Type.o Editor.o Blitter.o
+Robbo.exe: Window.o Type.o Editor.o Blitter.o Console.o
   $(link) $(lflags) $@ $**
 
 Window.o: Window.h Cell.h Blitter.h Editor.h Const.h
@@ -21,3 +21,5 @@ Editor.o: Editor.h Window.h Cell.h Const.h
 Blitter.o: Blitter.h
 
 Type.o: Cell.h Editor.h Const.h
+
+Console.o: Window.h

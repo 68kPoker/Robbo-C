@@ -13,3 +13,6 @@
 
 #define VIEW_WIDTH  16
 #define VIEW_HEIGHT 12
+
+struct IOStdReq *openConsole( struct Screen *s );
+void closeConsole( struct IOStdReq *io );

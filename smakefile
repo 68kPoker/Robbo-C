@@ -13,6 +13,8 @@ all: Robbo.exe
 .c.o:
   $(cc) $(cflags) $*.c
 
+O = Window.o Type.o Editor.o Blitter.o Console.o
+
 Window.o: Window.h Cell.h Blitter.h Editor.h Const.h
 
 Editor.o: Editor.h Window.h Cell.h Const.h
@@ -21,9 +23,9 @@ Blitter.o: Blitter.h
 
 Type.o: Cell.h Editor.h Const.h
 
-Robbo.exe: Window.o Type.o Editor.o Blitter.o
+Robbo.exe: $(O)
   $(link) <WITH <
-FROM $(STARTUP) Window.o Type.o Editor.o Blitter.o
+FROM $(STARTUP) $(O)
 LIBRARY $(LIBS)
 TO Robbo.exe $(LFLAGS)
 <

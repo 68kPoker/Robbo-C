@@ -486,7 +486,7 @@ VOID drawTileRastPort( struct BitMap *gfx, WORD sx, WORD sy, struct RastPort *rp
 
 /* Optimized tile/map functions */
 
-VOID writeTileLine( REG( a0 ) PLANEPTR src[], REG( a1 ) PLANEPTR dest, REG( d0 ) WORD wordWidth, REG( d1 ) WORD height, REG( d2 ) WORD srcMod, WORD REG( d3 ) destMod, REG( d4 ) WORD len )
+ASM VOID writeTileLine( REG( a0 ) PLANEPTR src[], REG( a1 ) PLANEPTR dest, REG( d0 ) WORD wordWidth, REG( d1 ) WORD height, REG( d2 ) WORD srcMod, WORD REG( d3 ) destMod, REG( d4 ) WORD len )
 {
     REGISTER struct Custom *c;
     REGISTER WORD i;
@@ -515,7 +515,7 @@ VOID writeTileLine( REG( a0 ) PLANEPTR src[], REG( a1 ) PLANEPTR dest, REG( d0 )
     DisownBlitter();
 }
 
-VOID writeTileBound( REG( a0 ) PLANEPTR src, REG( a1 ) PLANEPTR dest, REG( d0 ) WORD wordWidth, REG( d1 ) WORD height, REG( d2 ) WORD srcMod, WORD REG( d3 ) destMod, REG( d4 ) WORD x0, REG( d5 ) WORD x1 )
+ASM VOID writeTileBound( REG( a0 ) PLANEPTR src, REG( a1 ) PLANEPTR dest, REG( d0 ) WORD wordWidth, REG( d1 ) WORD height, REG( d2 ) WORD srcMod, WORD REG( d3 ) destMod, REG( d4 ) WORD x0, REG( d5 ) WORD x1 )
 {
     REGISTER struct Custom *c;
     REGISTER WORD i;
